@@ -12,6 +12,9 @@ interface SummaryProps {
 
 function computeTotalTime(s: Settings): string {
   if (s.mode === 'mindfulness') {
+    if (s.promptCount > 0) {
+      return formatDuration(s.promptCount * s.promptIntervalMinutes);
+    }
     return 'Runs until you stop it';
   }
 
@@ -25,6 +28,11 @@ function computeTotalTime(s: Settings): string {
 
   if (!s.multipleSets || s.numberOfSets <= 1) {
     return formatDuration(oneSetSec / 60);
+  }
+
+  // Unlimited sets
+  if (s.numberOfSets === 0) {
+    return 'Runs until you stop it';
   }
 
   // Multiple sets: (sets-1) * (oneSet + longBreak) + lastSet
@@ -57,10 +65,10 @@ export default function Summary({ settings: s, onBegin, onBack }: SummaryProps) 
               <Row label="Work sessions" value={`${formatNum(s.workMinutes)} min`} />
               <Row label="Breaks" value={`${formatNum(s.breakMinutes)} min`} />
               <Row label="Sessions per set" value={String(s.sessionsPerSet)} />
-              {s.multipleSets && s.numberOfSets > 1 && (
+              {s.multipleSets && (s.numberOfSets > 1 || s.numberOfSets === 0) && (
                 <>
                   <Row label="Long break" value={`${formatNum(s.longBreakMinutes)} min`} />
-                  <Row label="Number of sets" value={String(s.numberOfSets)} />
+                  <Row label="Number of sets" value={s.numberOfSets === 0 ? 'Unlimited' : String(s.numberOfSets)} />
                 </>
               )}
             </>
@@ -72,6 +80,14 @@ export default function Summary({ settings: s, onBegin, onBack }: SummaryProps) 
               <Row label="Mindfulness prompt" value={`"${s.promptText}"`} />
               <Row label="Prompt every" value={`${formatNum(s.promptIntervalMinutes)} min`} />
               <Row label="Dismiss delay" value={`${s.dismissSeconds}s`} />
+              {s.mode === 'mindfulness' && (
+                <Row
+                  label="Prompts"
+                  value={s.promptCount > 0
+                    ? `${s.promptCount} then done`
+                    : 'Indefinite'}
+                />
+              )}
             </>
           )}
 

@@ -21,6 +21,8 @@ export interface Settings {
   promptText: string;
   promptIntervalMinutes: number;
   dismissSeconds: number;
+  /** M-mode only: number of prompts before session ends. 0 = run indefinitely. */
+  promptCount: number;
 
   // Global
   playSound: boolean;

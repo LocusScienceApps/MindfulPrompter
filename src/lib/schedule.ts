@@ -19,29 +19,71 @@ export function computeSchedule(settings: Settings): TimerEvent[] {
 
 /**
  * Mode (a): Mindfulness prompts only.
- * Simple repeating interval, no end (generate enough for 24 hours).
+ * If promptCount > 0: generates exactly that many prompts then a session_complete event.
+ * If promptCount === 0: generates enough events for 24 hours (runs until stopped).
  */
 function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
   const events: TimerEvent[] = [];
   const intervalSec = s.promptIntervalMinutes * 60;
-  const maxEvents = Math.floor((24 * 3600) / intervalSec);
+  const count = s.promptCount > 0 ? s.promptCount : Math.floor((24 * 3600) / intervalSec);
 
-  for (let i = 0; i <= maxEvents; i++) {
-    const offset = i * intervalSec;
+  // Initial silent event at t=0 to mark session start
+  events.push({
+    offsetSeconds: 0,
+    type: 'work_start',
+    title: '',
+    body: '',
+    promptText: s.promptText,
+    setNumber: 0,
+    sessionNumber: 0,
+    globalSessionNumber: 0,
+    silent: true,
+  });
+
+  for (let i = 1; i <= count; i++) {
     events.push({
-      offsetSeconds: offset,
-      type: i === 0 ? 'work_start' : 'mindfulness',
-      title: i === 0 ? '' : '',
-      body: i === 0 ? '' : '',
+      offsetSeconds: i * intervalSec,
+      type: 'mindfulness',
+      title: '',
+      body: '',
       promptText: s.promptText,
       setNumber: 0,
-      sessionNumber: 0,
-      globalSessionNumber: 0,
-      silent: i === 0, // Don't popup on session start
+      sessionNumber: i,
+      globalSessionNumber: i,
+    });
+  }
+
+  // If a prompt count was set, add a session_complete event 2 seconds after the last prompt
+  if (s.promptCount > 0) {
+    const totalMin = (count * intervalSec) / 60;
+    const hours = Math.floor(totalMin / 60);
+    const mins = Math.round(totalMin % 60);
+    const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    events.push({
+      offsetSeconds: count * intervalSec + 2,
+      type: 'session_complete',
+      title: 'Session complete!',
+      body: `${count} prompt${count !== 1 ? 's' : ''} in ${timeStr}.`,
+      promptText: s.promptText,
+      setNumber: 0,
+      sessionNumber: count,
+      globalSessionNumber: count,
     });
   }
 
   return events;
+}
+
+/**
+ * When numberOfSets === 0 (unlimited), compute how many complete sets fit in 24 hours, capped at 50.
+ */
+function computeMaxSets(s: Settings): number {
+  const workSec = Math.round(s.workMinutes * 60);
+  const breakSec = Math.round(s.breakMinutes * 60);
+  const longBreakSec = Math.round(s.longBreakMinutes * 60);
+  const oneSetSec = s.sessionsPerSet * workSec + (s.sessionsPerSet - 1) * breakSec;
+  const setWithBreakSec = oneSetSec + longBreakSec;
+  return Math.max(1, Math.min(50, Math.floor((24 * 3600) / setWithBreakSec)));
 }
 
 /**
@@ -55,7 +97,11 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
   const reminderSec = includeMindfulness ? s.promptIntervalMinutes * 60 : 0;
   const remindersPerWork = reminderSec > 0 ? Math.round(workSec / reminderSec) : 0;
 
-  const numSets = s.multipleSets && s.numberOfSets > 1 ? s.numberOfSets : 1;
+  // numberOfSets === 0 means unlimited: pre-generate enough sets to fill 24 hours
+  const isUnlimited = s.multipleSets && s.numberOfSets === 0;
+  const numSets = s.multipleSets
+    ? (s.numberOfSets === 0 ? computeMaxSets(s) : Math.max(1, s.numberOfSets))
+    : 1;
   const sessionsPerSet = s.sessionsPerSet;
   const totalSessions = numSets * sessionsPerSet;
   let offset = 0;
@@ -75,8 +121,8 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
         body: isFirst
           ? ''
           : (session === 0 && set > 0
-              ? `Set ${set} complete! Set ${set + 1} starting.\nSession ${globalSession} of ${totalSessions}. (${formatNum(s.workMinutes)}-min work session)`
-              : `Break over! Session ${globalSession} of ${totalSessions} starting. (${formatNum(s.workMinutes)}-min work session)`),
+              ? `Set ${set} complete! Set ${set + 1} starting.\nSession ${globalSession}${isUnlimited ? '' : ` of ${totalSessions}`}. (${formatNum(s.workMinutes)}-min work session)`
+              : `Break over! Session ${globalSession}${isUnlimited ? '' : ` of ${totalSessions}`} starting. (${formatNum(s.workMinutes)}-min work session)`),
         promptText: prompt,
         setNumber: set + 1,
         sessionNumber: session + 1,
@@ -112,12 +158,13 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
         const hours = Math.floor(totalMin / 60);
         const mins = Math.round(totalMin % 60);
         const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        const setsLabel = isUnlimited ? 'unlimited sets' : `${numSets} set${numSets > 1 ? 's' : ''}`;
 
         events.push({
           offsetSeconds: offset,
           type: 'session_complete',
           title: 'Great work!',
-          body: `${totalSessions} sessions${numSets > 1 ? ` across ${numSets} sets` : ''} in ${timeStr}.`,
+          body: `${totalSessions} sessions${numSets > 1 ? ` across ${setsLabel}` : ''} in ${timeStr}.`,
           promptText: prompt,
           setNumber: set + 1,
           sessionNumber: session + 1,

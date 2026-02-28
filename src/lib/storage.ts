@@ -89,3 +89,32 @@ export function loadPreset(slot: PresetSlot): Preset | null {
   const file = loadFile();
   return file.presets[slot] ?? null;
 }
+
+/**
+ * Rename a preset in a slot.
+ */
+export function renamePreset(slot: PresetSlot, newName: string): void {
+  const file = loadFile();
+  if (file.presets[slot]) {
+    file.presets[slot] = { ...file.presets[slot], name: newName };
+    saveFile(file);
+  }
+}
+
+/**
+ * Delete a preset from a slot.
+ */
+export function deletePreset(slot: PresetSlot): void {
+  const file = loadFile();
+  delete file.presets[slot];
+  saveFile(file);
+}
+
+/**
+ * Clear saved default overrides for a mode, reverting to factory defaults.
+ */
+export function clearDefaultsForMode(mode: AppMode): void {
+  const file = loadFile();
+  delete file[defaultsKey(mode)];
+  saveFile(file);
+}

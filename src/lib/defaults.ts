@@ -23,6 +23,7 @@ export function getDefaults(mode: AppMode): Settings {
         numberOfSets: 0,
         // Mindfulness defaults
         promptIntervalMinutes: 15,
+        promptCount: 0, // 0 = run indefinitely
       };
 
     case 'pomodoro':
@@ -39,6 +40,7 @@ export function getDefaults(mode: AppMode): Settings {
         promptIntervalMinutes: 0,
         promptText: '',
         dismissSeconds: 0,
+        promptCount: 0,
       };
 
     case 'both':
@@ -53,6 +55,7 @@ export function getDefaults(mode: AppMode): Settings {
         numberOfSets: 1,
         // Mindfulness defaults (interval = work / 2)
         promptIntervalMinutes: 12.5,
+        promptCount: 0,
       };
   }
 }
@@ -114,6 +117,8 @@ export function generatePresetName(mode: AppMode, settings: Settings): string {
       diffs.push(`every ${formatNum(settings.promptIntervalMinutes)}m`);
     if (settings.dismissSeconds !== factory.dismissSeconds)
       diffs.push(`${settings.dismissSeconds}s delay`);
+    if (mode === 'mindfulness' && settings.promptCount > 0)
+      diffs.push(`${settings.promptCount} prompts`);
   }
 
   if (diffs.length === 0) return 'Custom preset';

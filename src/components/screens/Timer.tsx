@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Settings, TimerEvent, WorkerMessage, SessionStats } from '@/lib/types';
+import type { Settings, TimerEvent, SessionStats } from '@/lib/types';
 import { computeSchedule } from '@/lib/schedule';
 import { formatCountdown } from '@/lib/format';
 import { initAudio, playChime } from '@/lib/sound';
@@ -144,15 +144,15 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
   const [log, setLog] = useState<LogEntry[]>([{ time: formatTime(), message: 'Session started' }]);
   const [showOverlay, setShowOverlay] = useState(false);
 
-  const workerRef = useRef<Worker | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scheduleRef = useRef<TimerEvent[]>([]);
   const startTimeRef = useRef<number>(Date.now()); // Stable start time across re-mounts
   const logEndRef = useRef<HTMLDivElement>(null);
-  // Use refs for values needed in worker callback to avoid stale closures
+  // Use refs for values needed in tick callback to avoid stale closures
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const elapsedRef = useRef(0);
-  // Accumulate stats via ref so the worker callback always updates the latest value
+  // Accumulate stats via ref so the tick callback always updates the latest value
   const statsRef = useRef({ sessions: 0, sets: 0, prompts: 0 });
 
   const buildStats = useCallback((): SessionStats => {
@@ -171,76 +171,77 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
     requestNotificationPermission();
   }, []);
 
-  // Start the worker — re-creates on strict mode remount but uses stable start time
+  // Start the interval timer — re-creates on strict mode remount but uses stable start time
   useEffect(() => {
     const schedule = computeSchedule(settings);
     scheduleRef.current = schedule;
 
-    const worker = new Worker('/timer-worker.js');
-    workerRef.current = worker;
+    const firedSet = new Set<number>();
 
-    worker.onmessage = (e: MessageEvent<WorkerMessage>) => {
-      const msg = e.data;
+    const tick = () => {
+      const now = Date.now();
+      const elapsed = (now - startTimeRef.current) / 1000;
 
-      if (msg.type === 'tick') {
-        setElapsed(msg.elapsed);
-        elapsedRef.current = msg.elapsed;
-      }
+      setElapsed(elapsed);
+      elapsedRef.current = elapsed;
 
-      if (msg.type === 'event') {
-        const event = msg.event;
+      // Check for events that should fire
+      for (let i = 0; i < scheduleRef.current.length; i++) {
+        if (firedSet.has(i)) continue;
+        if (elapsed >= scheduleRef.current[i].offsetSeconds) {
+          firedSet.add(i);
+          const event = scheduleRef.current[i];
 
-        // Skip silent events (e.g., initial session start)
-        if (event.silent) return;
+          // Skip silent events (e.g., initial session start)
+          if (event.silent) continue;
 
-        // Accumulate stats
-        if (event.type === 'mindfulness') {
-          statsRef.current.prompts++;
-        } else if (event.type === 'short_break') {
-          statsRef.current.sessions++;
-        } else if (event.type === 'long_break') {
-          statsRef.current.sessions++;
-          statsRef.current.sets++;
-        } else if (event.type === 'session_complete') {
-          statsRef.current.sessions++;
-          statsRef.current.sets++;
+          // Accumulate stats
+          if (event.type === 'mindfulness') {
+            statsRef.current.prompts++;
+          } else if (event.type === 'short_break') {
+            statsRef.current.sessions++;
+          } else if (event.type === 'long_break') {
+            statsRef.current.sessions++;
+            statsRef.current.sets++;
+          } else if (event.type === 'session_complete') {
+            statsRef.current.sessions++;
+            statsRef.current.sets++;
+          }
+
+          setCurrentEvent(event);
+          setShowOverlay(true);
+
+          // Play sound
+          if (settingsRef.current.playSound) {
+            playChime();
+          }
+
+          // Browser notification
+          sendBrowserNotification(event);
+
+          // Event log
+          const logMsg =
+            event.type === 'mindfulness'
+              ? 'Mindfulness prompt'
+              : event.type === 'short_break'
+                ? 'Break started'
+                : event.type === 'long_break'
+                  ? 'Long break started'
+                  : event.type === 'session_complete'
+                    ? 'Session complete!'
+                    : event.title || 'Work session started';
+          setLog((prev) => [...prev, { time: formatTime(), message: logMsg }]);
         }
-
-        setCurrentEvent(event);
-        setShowOverlay(true);
-
-        // Play sound
-        if (settingsRef.current.playSound) {
-          playChime();
-        }
-
-        // Browser notification
-        sendBrowserNotification(event);
-
-        // Event log
-        const logMsg =
-          event.type === 'mindfulness'
-            ? 'Mindfulness prompt'
-            : event.type === 'short_break'
-              ? 'Break started'
-              : event.type === 'long_break'
-                ? 'Long break started'
-                : event.type === 'session_complete'
-                  ? 'Session complete!'
-                  : event.title || 'Work session started';
-        setLog((prev) => [...prev, { time: formatTime(), message: logMsg }]);
       }
     };
 
-    worker.postMessage({
-      type: 'start',
-      schedule,
-      startTime: startTimeRef.current,
-    });
+    intervalRef.current = setInterval(tick, 1000);
 
     return () => {
-      worker.postMessage({ type: 'stop' });
-      worker.terminate();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps — runs once, uses refs for everything
@@ -258,9 +259,9 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
   }, [currentEvent, onSessionComplete, buildStats]);
 
   const handleStop = () => {
-    if (workerRef.current) {
-      workerRef.current.postMessage({ type: 'stop' });
-      workerRef.current.terminate();
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     onStop(buildStats());
   };
@@ -305,6 +306,11 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
           colorClass={ringColor}
         />
       </div>
+
+      {/* Elapsed time — shows that the session is actively running */}
+      <p className="text-center text-sm text-gray-400">
+        Session running: {formatCountdown(Math.floor(elapsed))}
+      </p>
 
       {/* Additional context */}
       {contextLines.length > 1 && (

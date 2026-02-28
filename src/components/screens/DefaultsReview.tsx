@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { Settings } from '@/lib/types';
-import { listPresetsForMode } from '@/lib/storage';
+import type { Settings, PresetSlot } from '@/lib/types';
+import { listPresetsForMode, renamePreset, deletePreset, clearDefaultsForMode } from '@/lib/storage';
 import { formatNum } from '@/lib/format';
 import Button from '../ui/Button';
 
@@ -25,8 +25,56 @@ export default function DefaultsReview({
 }: DefaultsReviewProps) {
   const { mode } = settings;
   const [showPresets, setShowPresets] = useState(false);
+  // Local copy of presets so rename/delete updates are reflected immediately
+  const [presets, setPresets] = useState(() => listPresetsForMode(mode));
 
-  const presets = listPresetsForMode(mode);
+  // Rename state
+  const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  // Delete confirmation state
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
+
+  const refreshPresets = () => setPresets(listPresetsForMode(mode));
+
+  const handleLoad = (slot: PresetSlot) => {
+    const preset = presets.find((p) => p.slot === slot);
+    if (preset) {
+      onLoadPreset(preset.preset.settings);
+      setShowPresets(false);
+    }
+  };
+
+  const handleStartRename = (slot: PresetSlot, currentName: string) => {
+    setRenamingSlot(slot);
+    setRenameValue(currentName);
+    setConfirmDeleteSlot(null);
+  };
+
+  const handleSaveRename = (slot: PresetSlot) => {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      renamePreset(slot, trimmed);
+      refreshPresets();
+    }
+    setRenamingSlot(null);
+  };
+
+  const handleDelete = (slot: PresetSlot) => {
+    if (confirmDeleteSlot === slot) {
+      deletePreset(slot);
+      refreshPresets();
+      setConfirmDeleteSlot(null);
+    } else {
+      setConfirmDeleteSlot(slot);
+      setRenamingSlot(null);
+    }
+  };
+
+  const handleFactoryReset = () => {
+    clearDefaultsForMode(mode);
+    onBack();
+  };
 
   return (
     <div className="space-y-6">
@@ -57,7 +105,10 @@ export default function DefaultsReview({
               {settings.multipleSets && (
                 <>
                   <SettingRow label="Long break" value={`${formatNum(settings.longBreakMinutes)} minutes`} />
-                  <SettingRow label="Number of sets" value={String(settings.numberOfSets)} />
+                  <SettingRow
+                    label="Number of sets"
+                    value={settings.numberOfSets === 0 ? 'Unlimited' : String(settings.numberOfSets)}
+                  />
                 </>
               )}
             </>
@@ -78,6 +129,14 @@ export default function DefaultsReview({
                 label="Dismiss delay"
                 value={`${settings.dismissSeconds} seconds`}
               />
+              {mode === 'mindfulness' && (
+                <SettingRow
+                  label="Runs"
+                  value={settings.promptCount > 0
+                    ? `${settings.promptCount} prompt${settings.promptCount !== 1 ? 's' : ''} then stops`
+                    : 'Indefinitely (until stopped)'}
+                />
+              )}
             </>
           )}
 
@@ -94,26 +153,79 @@ export default function DefaultsReview({
           ) : (
             <div className="space-y-2">
               {presets.map(({ slot, preset }) => (
-                <button
+                <div
                   key={slot}
-                  onClick={() => {
-                    onLoadPreset(preset.settings);
-                    setShowPresets(false);
-                  }}
-                  className="w-full rounded-lg border border-indigo-200 bg-white px-4 py-2 text-left text-sm hover:border-indigo-400 hover:bg-indigo-50"
+                  className="rounded-lg border border-indigo-200 bg-white px-3 py-2"
                 >
-                  <span className="font-medium text-gray-800">{slot}</span>
-                  <span className="mx-2 text-gray-400">&mdash;</span>
-                  <span className="text-gray-600">{preset.name}</span>
-                </button>
+                  {renamingSlot === slot ? (
+                    /* Inline rename editor */
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename(slot);
+                          if (e.key === 'Escape') setRenamingSlot(null);
+                        }}
+                        autoFocus
+                        className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => handleSaveRename(slot)}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setRenamingSlot(null)}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    /* Normal row */
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleLoad(slot)}
+                        className="flex-1 text-left text-sm"
+                      >
+                        <span className="font-medium text-gray-700">{slot}</span>
+                        <span className="mx-2 text-gray-400">&mdash;</span>
+                        <span className="text-gray-600">{preset.name}</span>
+                      </button>
+                      <button
+                        onClick={() => handleStartRename(slot, preset.name)}
+                        className="text-xs text-gray-400 hover:text-indigo-600"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => handleDelete(slot)}
+                        className={`text-xs font-medium ${
+                          confirmDeleteSlot === slot
+                            ? 'text-red-600 hover:text-red-800'
+                            : 'text-gray-400 hover:text-red-500'
+                        }`}
+                      >
+                        {confirmDeleteSlot === slot ? 'Confirm?' : 'Delete'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
           <button
-            onClick={() => setShowPresets(false)}
+            onClick={() => {
+              setShowPresets(false);
+              setRenamingSlot(null);
+              setConfirmDeleteSlot(null);
+            }}
             className="mt-3 text-sm text-indigo-600 hover:text-indigo-800"
           >
-            Cancel
+            Close
           </button>
         </div>
       )}
@@ -139,6 +251,12 @@ export default function DefaultsReview({
           className="text-sm text-gray-500 hover:text-gray-700 underline"
         >
           Edit defaults for this mode
+        </button>
+        <button
+          onClick={handleFactoryReset}
+          className="text-sm text-gray-400 hover:text-gray-600 underline"
+        >
+          Reset to factory defaults
         </button>
       </div>
     </div>

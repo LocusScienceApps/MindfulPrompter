@@ -32,6 +32,7 @@ type StepId =
   | 'promptText'
   | 'promptInterval'
   | 'dismissDelay'
+  | 'promptCount'
   | 'sound';
 
 function getSteps(mode: Settings['mode'], multipleSets: boolean): StepId[] {
@@ -46,6 +47,7 @@ function getSteps(mode: Settings['mode'], multipleSets: boolean): StepId[] {
 
   if (mode === 'mindfulness' || mode === 'both') {
     steps.push('promptText', 'promptInterval', 'dismissDelay');
+    if (mode === 'mindfulness') steps.push('promptCount');
   }
 
   steps.push('sound');
@@ -96,6 +98,7 @@ export default function Customize({ settings: initial, onDone, onSaveAsDefault, 
     if (currentStep === 'numberOfSets' && s.numberOfSets === 1) {
       update({ multipleSets: false, numberOfSets: 1 });
     }
+    // 0 = unlimited: keep multipleSets true so the schedule generates many sets
 
     if (isLastStep) {
       // Show save options instead of proceeding immediately
@@ -365,18 +368,19 @@ export default function Customize({ settings: initial, onDone, onSaveAsDefault, 
         {currentStep === 'numberOfSets' && (
           <StepContent
             title={`How many sets of ${s.sessionsPerSet} pomodoros would you like to complete?`}
-            helper="Leave blank for the default (3)."
+            helper="Leave blank for the default (3). Enter 0 to run until you stop."
           >
             <NumericInput
               value={s.numberOfSets}
               defaultValue={3}
               unit="sets"
               integerOnly
+              allowZero
               onChange={(v) => update({ numberOfSets: v })}
             />
-            {s.numberOfSets === 1 && (
-              <p className="mt-2 text-sm text-amber-600">
-                You chose multiple sets earlier but entered 1. This will be treated as a single set with no long break.
+            {s.numberOfSets === 0 && (
+              <p className="mt-2 text-sm text-gray-500">
+                Session will cycle sets indefinitely until you click Stop.
               </p>
             )}
           </StepContent>
@@ -431,6 +435,33 @@ export default function Customize({ settings: initial, onDone, onSaveAsDefault, 
               integerOnly
               onChange={(v) => update({ dismissSeconds: v })}
             />
+          </StepContent>
+        )}
+
+        {/* PROMPT COUNT */}
+        {currentStep === 'promptCount' && (
+          <StepContent
+            title="How many prompts before the session ends?"
+            helper="Leave blank (or enter 0) to run indefinitely until you stop it."
+          >
+            <NumericInput
+              value={s.promptCount}
+              defaultValue={0}
+              unit="prompts"
+              integerOnly
+              allowZero
+              onChange={(v) => update({ promptCount: v })}
+            />
+            {s.promptCount > 0 && (
+              <p className="mt-2 text-sm text-gray-500">
+                Session will end automatically after {s.promptCount} prompt{s.promptCount !== 1 ? 's' : ''}.
+              </p>
+            )}
+            {s.promptCount === 0 && (
+              <p className="mt-2 text-sm text-gray-500">
+                Session runs until you click Stop.
+              </p>
+            )}
           </StepContent>
         )}
 
@@ -492,12 +523,14 @@ function NumericInput({
   defaultValue,
   unit,
   integerOnly = false,
+  allowZero = false,
   onChange,
 }: {
   value: number;
   defaultValue: number;
   unit: string;
   integerOnly?: boolean;
+  allowZero?: boolean;
   onChange: (v: number) => void;
 }) {
   const [rawInput, setRawInput] = useState('');
@@ -510,7 +543,7 @@ function NumericInput({
       return;
     }
     const parsed = integerOnly ? parseInt(raw, 10) : parseFloat(raw);
-    if (!isNaN(parsed) && parsed > 0) {
+    if (!isNaN(parsed) && (allowZero ? parsed >= 0 : parsed > 0)) {
       onChange(parsed);
     }
   };
@@ -520,9 +553,9 @@ function NumericInput({
       <input
         type="number"
         value={rawInput}
-        placeholder={formatNum(defaultValue)}
+        placeholder={defaultValue === 0 ? '0' : formatNum(defaultValue)}
         onChange={handleChange}
-        min={integerOnly ? 1 : 0.5}
+        min={allowZero ? 0 : (integerOnly ? 1 : 0.5)}
         step={integerOnly ? 1 : 0.5}
         className="w-32 rounded-lg border-2 border-gray-300 px-4 py-3 text-lg transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />

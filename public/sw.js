@@ -1,9 +1,9 @@
 /**
  * Service Worker for MindfulPrompter PWA.
- * v1: Basic offline caching + notification click handling.
+ * v2: Bumped cache name to force refresh after timer/promptCount fixes.
  */
 
-const CACHE_NAME = 'mindful-prompter-v1';
+const CACHE_NAME = 'mindful-prompter-v2';
 
 // Cache the app shell on install
 self.addEventListener('install', (event) => {

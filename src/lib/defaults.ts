@@ -1,4 +1,5 @@
 import type { AppMode, Settings } from './types';
+import { formatNum } from './format';
 
 /** Default settings for each mode */
 export function getDefaults(mode: AppMode): Settings {
@@ -83,4 +84,38 @@ export function defaultPromptInterval(workMinutes: number): number {
  */
 function roundToSecond(minutes: number): number {
   return Math.round(minutes * 60) / 60;
+}
+
+/**
+ * Auto-generate a preset name by comparing settings to factory defaults.
+ * Describes the first 3 differences, e.g. "45m work, 10m break, 2 sessions".
+ * Returns "Custom preset" if there are no differences.
+ * Ported from MindfulnessPrompter.bat Generate-PresetName
+ */
+export function generatePresetName(mode: AppMode, settings: Settings): string {
+  const factory = getDefaults(mode);
+  const diffs: string[] = [];
+
+  if (mode === 'pomodoro' || mode === 'both') {
+    if (settings.workMinutes !== factory.workMinutes)
+      diffs.push(`${formatNum(settings.workMinutes)}m work`);
+    if (settings.breakMinutes !== factory.breakMinutes)
+      diffs.push(`${formatNum(settings.breakMinutes)}m break`);
+    if (settings.sessionsPerSet !== factory.sessionsPerSet)
+      diffs.push(`${settings.sessionsPerSet} sessions`);
+    if (settings.multipleSets && !factory.multipleSets)
+      diffs.push(`${settings.numberOfSets} sets`);
+  }
+
+  if (mode === 'mindfulness' || mode === 'both') {
+    if (settings.promptText !== factory.promptText)
+      diffs.push('custom prompt');
+    if (settings.promptIntervalMinutes !== factory.promptIntervalMinutes)
+      diffs.push(`every ${formatNum(settings.promptIntervalMinutes)}m`);
+    if (settings.dismissSeconds !== factory.dismissSeconds)
+      diffs.push(`${settings.dismissSeconds}s delay`);
+  }
+
+  if (diffs.length === 0) return 'Custom preset';
+  return diffs.slice(0, 3).join(', ');
 }

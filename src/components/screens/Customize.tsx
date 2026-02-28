@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { Settings } from '@/lib/types';
+import type { Settings, PresetSlot } from '@/lib/types';
 import {
   defaultBreakMinutes,
   defaultLongBreakMinutes,
   defaultPromptInterval,
+  generatePresetName,
 } from '@/lib/defaults';
+import { getPresetSlots, savePreset } from '@/lib/storage';
 import { formatNum } from '@/lib/format';
 import { dividesEvenly, formatDivisorList } from '@/lib/validation';
 import Button from '../ui/Button';
@@ -15,6 +17,7 @@ import StepIndicator from '../ui/StepIndicator';
 interface CustomizeProps {
   settings: Settings;
   onDone: (settings: Settings) => void;
+  onSaveAsDefault: (settings: Settings) => void;
   onBack: () => void;
 }
 
@@ -49,10 +52,17 @@ function getSteps(mode: Settings['mode'], multipleSets: boolean): StepId[] {
   return steps;
 }
 
-export default function Customize({ settings: initial, onDone, onBack }: CustomizeProps) {
+type SaveView = 'options' | 'preset-picker';
+
+export default function Customize({ settings: initial, onDone, onSaveAsDefault, onBack }: CustomizeProps) {
   const [s, setS] = useState<Settings>({ ...initial });
   const [stepIndex, setStepIndex] = useState(0);
   const [error, setError] = useState('');
+
+  // Save options state
+  const [saveView, setSaveView] = useState<SaveView | null>(null);
+  const [presetName, setPresetName] = useState('');
+  const [savedSlot, setSavedSlot] = useState<PresetSlot | null>(null);
 
   // Recompute steps whenever multipleSets changes
   const steps = useMemo(() => getSteps(s.mode, s.multipleSets), [s.mode, s.multipleSets]);
@@ -66,25 +76,30 @@ export default function Customize({ settings: initial, onDone, onBack }: Customi
 
   const goNext = () => {
     // Validate current step
-    if (currentStep === 'promptInterval' && s.mode === 'both') {
-      if (!dividesEvenly(s.workMinutes, s.promptIntervalMinutes)) {
+    if (currentStep === 'promptInterval') {
+      if (s.mode === 'both' && !dividesEvenly(s.workMinutes, s.promptIntervalMinutes)) {
         const suggestions = formatDivisorList(s.workMinutes);
         setError(
           `That doesn't fit evenly into your ${formatNum(s.workMinutes)}-minute work session. Try: ${suggestions}`
         );
         return;
       }
+      if (s.mode === 'mindfulness' && !dividesEvenly(60, s.promptIntervalMinutes)) {
+        const suggestions = formatDivisorList(60);
+        setError(
+          `That doesn't divide evenly into 60 minutes. Try: ${suggestions}`
+        );
+        return;
+      }
     }
 
     if (currentStep === 'numberOfSets' && s.numberOfSets === 1) {
-      // They said yes to multiple sets but entered 1 — warn and revert
       update({ multipleSets: false, numberOfSets: 1 });
-      // Skip back to after multipleSets (the steps array will recalculate)
-      // Just advance to the next step, which will now be past the long break questions
     }
 
     if (isLastStep) {
-      onDone(s);
+      // Show save options instead of proceeding immediately
+      setSaveView('options');
     } else {
       setStepIndex((i) => Math.min(i + 1, steps.length - 1));
       setError('');
@@ -92,6 +107,14 @@ export default function Customize({ settings: initial, onDone, onBack }: Customi
   };
 
   const goBack = () => {
+    if (saveView) {
+      if (saveView === 'preset-picker') {
+        setSaveView('options');
+      } else {
+        setSaveView(null);
+      }
+      return;
+    }
     if (stepIndex === 0) {
       onBack();
     } else {
@@ -100,11 +123,118 @@ export default function Customize({ settings: initial, onDone, onBack }: Customi
     }
   };
 
+  // Preset slot picker data
+  const presetSlots = saveView === 'preset-picker' ? getPresetSlots(s.mode) : [];
+
+  const handleSavePreset = (slot: PresetSlot) => {
+    const name = presetName.trim() || generatePresetName(s.mode, s);
+    savePreset(slot, { name, mode: s.mode, settings: s });
+    setSavedSlot(slot);
+    setSaveView('options');
+  };
+
   // Recalculate derived defaults when dependencies change
   const derivedBreak = defaultBreakMinutes(s.workMinutes);
   const derivedLongBreak = defaultLongBreakMinutes(s.breakMinutes);
   const derivedInterval = defaultPromptInterval(s.workMinutes);
 
+  // ----------------------------------------------------------------
+  // Save options panel
+  // ----------------------------------------------------------------
+  if (saveView === 'options') {
+    return (
+      <div className="space-y-6">
+        <button onClick={goBack} className="text-sm text-indigo-600 hover:text-indigo-800">
+          &larr; Back
+        </button>
+
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">Settings ready</h2>
+          <p className="mt-1 text-gray-500">What would you like to do?</p>
+        </div>
+
+        {savedSlot && (
+          <p className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">
+            Preset saved to slot {savedSlot}.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-3">
+          <Button onClick={() => onDone(s)} className="w-full text-lg">
+            Start session
+          </Button>
+          <Button
+            onClick={() => {
+              setPresetName(generatePresetName(s.mode, s));
+              setSavedSlot(null);
+              setSaveView('preset-picker');
+            }}
+            variant="secondary"
+            className="w-full"
+          >
+            Save as preset
+          </Button>
+          <Button
+            onClick={() => onSaveAsDefault(s)}
+            variant="secondary"
+            className="w-full"
+          >
+            Save as default for this mode
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------------
+  // Preset slot picker
+  // ----------------------------------------------------------------
+  if (saveView === 'preset-picker') {
+    return (
+      <div className="space-y-6">
+        <button onClick={goBack} className="text-sm text-indigo-600 hover:text-indigo-800">
+          &larr; Back
+        </button>
+
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">Save preset</h2>
+          <p className="mt-1 text-gray-500">Choose a slot and give it a name</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Preset name</label>
+          <input
+            type="text"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder={generatePresetName(s.mode, s)}
+            className="w-full rounded-lg border-2 border-gray-300 px-4 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div className="space-y-2">
+          {presetSlots.map(({ slot, preset }) => (
+            <button
+              key={slot}
+              onClick={() => handleSavePreset(slot)}
+              className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-left hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
+            >
+              <span className="font-medium text-gray-700">{slot}</span>
+              {preset ? (
+                <span className="ml-3 text-sm text-gray-500">Overwrite &ldquo;{preset.name}&rdquo;</span>
+              ) : (
+                <span className="ml-3 text-sm text-gray-400">Empty slot</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------------
+  // Main customization wizard
+  // ----------------------------------------------------------------
   return (
     <div className="space-y-6">
       <button
@@ -275,7 +405,7 @@ export default function Customize({ settings: initial, onDone, onBack }: Customi
             helper={
               s.mode === 'both'
                 ? `Must fit evenly into your ${formatNum(s.workMinutes)}-minute work session. Default: ${formatNum(derivedInterval)} minutes.`
-                : `Leave blank for the default (15 minutes).`
+                : `Must divide evenly into 60 minutes. Default: 15 minutes.`
             }
           >
             <NumericInput
@@ -330,7 +460,7 @@ export default function Customize({ settings: initial, onDone, onBack }: Customi
       {/* Next button (not shown for multipleSets or sound toggle — those auto-advance or have inline buttons) */}
       {currentStep !== 'multipleSets' && (
         <Button onClick={goNext} className="w-full text-lg">
-          {isLastStep ? 'Review Settings' : 'Next'}
+          {isLastStep ? 'Review options' : 'Next'}
         </Button>
       )}
     </div>

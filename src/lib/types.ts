@@ -59,3 +59,33 @@ export type Screen =
   | 'summary'
   | 'timer'
   | 'session-complete';
+
+/** Preset slot key — P/M/B + slot number 1-5 */
+export type PresetSlot =
+  | 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
+  | 'M1' | 'M2' | 'M3' | 'M4' | 'M5'
+  | 'B1' | 'B2' | 'B3' | 'B4' | 'B5';
+
+/** A saved preset */
+export interface Preset {
+  name: string;
+  mode: AppMode;
+  settings: Settings;
+}
+
+/** The full persisted settings file structure */
+export interface SettingsFile {
+  defaultsP?: Partial<Settings>;
+  defaultsM?: Partial<Settings>;
+  defaultsB?: Partial<Settings>;
+  presets: Partial<Record<PresetSlot, Preset>>;
+}
+
+/** Stats accumulated during a timer session */
+export interface SessionStats {
+  sessionsCompleted: number;
+  setsCompleted: number;
+  promptsCompleted: number;
+  totalWorkMinutes: number;
+  totalElapsedSeconds: number;
+}

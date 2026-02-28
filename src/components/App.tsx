@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { AppMode, Screen, Settings } from '@/lib/types';
+import type { AppMode, Screen, Settings, SessionStats } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
+import { getDefaultsForMode, saveDefaultsForMode } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
 import ModeSelect from './screens/ModeSelect';
 import DefaultsReview from './screens/DefaultsReview';
@@ -11,10 +12,18 @@ import Summary from './screens/Summary';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
 
+/** Merge factory defaults with any saved custom defaults for the mode. */
+function getSettingsForMode(mode: AppMode): Settings {
+  const factory = getDefaults(mode);
+  const saved = getDefaultsForMode(mode);
+  return { ...factory, ...saved };
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('mode-select');
   const [mode, setMode] = useState<AppMode>('both');
-  const [settings, setSettings] = useState<Settings>(getDefaults('both'));
+  const [settings, setSettings] = useState<Settings>(getSettingsForMode('both'));
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
 
   useEffect(() => {
     registerServiceWorker();
@@ -22,7 +31,7 @@ export default function App() {
 
   const handleModeSelect = (selectedMode: AppMode) => {
     setMode(selectedMode);
-    setSettings(getDefaults(selectedMode));
+    setSettings(getSettingsForMode(selectedMode));
     setScreen('defaults-review');
   };
 
@@ -39,15 +48,29 @@ export default function App() {
     setScreen('summary');
   };
 
+  const handleSaveAsDefault = (s: Settings) => {
+    saveDefaultsForMode(s.mode, s);
+    setSettings(s);
+    setScreen('defaults-review');
+  };
+
+  const handleLoadPreset = (presetSettings: Settings) => {
+    setSettings(presetSettings);
+    // Stay on defaults-review, which will re-render with the loaded settings
+  };
+
   const handleBeginSession = () => {
+    setSessionStats(null);
     setScreen('timer');
   };
 
-  const handleSessionComplete = () => {
+  const handleSessionEnd = (stats: SessionStats) => {
+    setSessionStats(stats);
     setScreen('session-complete');
   };
 
   const handleStartAgain = () => {
+    setSessionStats(null);
     setScreen('timer');
   };
 
@@ -70,6 +93,8 @@ export default function App() {
             settings={settings}
             onStart={handleStartWithDefaults}
             onCustomize={handleCustomize}
+            onEditDefaults={handleCustomize}
+            onLoadPreset={handleLoadPreset}
             onBack={() => handleBack('mode-select')}
           />
         )}
@@ -77,6 +102,7 @@ export default function App() {
           <Customize
             settings={settings}
             onDone={handleCustomizeDone}
+            onSaveAsDefault={handleSaveAsDefault}
             onBack={() => handleBack('defaults-review')}
           />
         )}
@@ -84,19 +110,20 @@ export default function App() {
           <Summary
             settings={settings}
             onBegin={handleBeginSession}
-            onBack={() => handleBack(settings === getDefaults(mode) ? 'defaults-review' : 'customize')}
+            onBack={() => handleBack('customize')}
           />
         )}
         {screen === 'timer' && (
           <Timer
             settings={settings}
-            onSessionComplete={handleSessionComplete}
-            onStop={() => handleSessionComplete()}
+            onSessionComplete={handleSessionEnd}
+            onStop={handleSessionEnd}
           />
         )}
         {screen === 'session-complete' && (
           <SessionComplete
             settings={settings}
+            stats={sessionStats}
             onStartAgain={handleStartAgain}
             onNewSession={handleNewSession}
           />

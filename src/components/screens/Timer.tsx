@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Settings, TimerEvent, WorkerMessage } from '@/lib/types';
+import type { Settings, TimerEvent, WorkerMessage, SessionStats } from '@/lib/types';
 import { computeSchedule } from '@/lib/schedule';
 import { formatCountdown } from '@/lib/format';
 import { initAudio, playChime } from '@/lib/sound';
@@ -11,8 +11,8 @@ import NotificationOverlay from '../NotificationOverlay';
 
 interface TimerProps {
   settings: Settings;
-  onSessionComplete: () => void;
-  onStop: () => void;
+  onSessionComplete: (stats: SessionStats) => void;
+  onStop: (stats: SessionStats) => void;
 }
 
 interface LogEntry {
@@ -148,9 +148,22 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
   const scheduleRef = useRef<TimerEvent[]>([]);
   const startTimeRef = useRef<number>(Date.now()); // Stable start time across re-mounts
   const logEndRef = useRef<HTMLDivElement>(null);
-  // Use a ref for settings so the worker callback always reads current values
+  // Use refs for values needed in worker callback to avoid stale closures
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  const elapsedRef = useRef(0);
+  // Accumulate stats via ref so the worker callback always updates the latest value
+  const statsRef = useRef({ sessions: 0, sets: 0, prompts: 0 });
+
+  const buildStats = useCallback((): SessionStats => {
+    return {
+      sessionsCompleted: statsRef.current.sessions,
+      setsCompleted: statsRef.current.sets,
+      promptsCompleted: statsRef.current.prompts,
+      totalWorkMinutes: statsRef.current.sessions * settingsRef.current.workMinutes,
+      totalElapsedSeconds: elapsedRef.current,
+    };
+  }, []);
 
   // Initialize audio and request notification permission once
   useEffect(() => {
@@ -171,6 +184,7 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
 
       if (msg.type === 'tick') {
         setElapsed(msg.elapsed);
+        elapsedRef.current = msg.elapsed;
       }
 
       if (msg.type === 'event') {
@@ -178,6 +192,19 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
 
         // Skip silent events (e.g., initial session start)
         if (event.silent) return;
+
+        // Accumulate stats
+        if (event.type === 'mindfulness') {
+          statsRef.current.prompts++;
+        } else if (event.type === 'short_break') {
+          statsRef.current.sessions++;
+        } else if (event.type === 'long_break') {
+          statsRef.current.sessions++;
+          statsRef.current.sets++;
+        } else if (event.type === 'session_complete') {
+          statsRef.current.sessions++;
+          statsRef.current.sets++;
+        }
 
         setCurrentEvent(event);
         setShowOverlay(true);
@@ -226,16 +253,16 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
   const handleDismissOverlay = useCallback(() => {
     setShowOverlay(false);
     if (currentEvent?.type === 'session_complete') {
-      onSessionComplete();
+      onSessionComplete(buildStats());
     }
-  }, [currentEvent, onSessionComplete]);
+  }, [currentEvent, onSessionComplete, buildStats]);
 
   const handleStop = () => {
     if (workerRef.current) {
       workerRef.current.postMessage({ type: 'stop' });
       workerRef.current.terminate();
     }
-    onStop();
+    onStop(buildStats());
   };
 
   const { phase, phaseLabel, phaseProgress, timeLeft, contextLines } =

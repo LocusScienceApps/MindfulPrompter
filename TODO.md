@@ -1,14 +1,14 @@
 # MindfulPrompter TODO
 
-## Status: Timer is broken — considering restart
+## Status: Working ✓
 
-The Next.js PWA approach has a persistent timer bug: even after replacing the
-Web Worker with setInterval, the timer screen stays stuck on "Starting... 0:00".
-The code changes are correct and the build passes, but something in the
-Next.js dev environment (React Strict Mode double-invoke, hydration, or
-service worker interference) is preventing the interval from ticking in the browser.
+**Root cause of all "nothing changed" issues was resolved:** The service worker
+was caching old JS and serving it on every reload. Code changes were correct all
+along. Fix: DevTools → Application → Service Workers → Unregister → Ctrl+Shift+R.
 
-**User preference: May want to start fresh with a simpler stack.**
+**Standard procedure before every test:** Unregister the service worker and hard-refresh.
+
+## Remaining work: bugs and feature gaps (TBD)
 
 ---
 

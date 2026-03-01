@@ -30,124 +30,27 @@ function Tooltip({ text, href, children }: TooltipProps) {
   );
 }
 
-// ── SVG icon primitives ────────────────────────────────────────────────────────
-// Each Paths component contains raw SVG elements for reuse in the combined icon.
-// Coordinate space: GongPaths → 52×44,  TomatoPaths → 44×44
-
-function GongPaths() {
-  return (
-    <>
-      {/* Stand: top crossbar + two vertical posts */}
-      <line x1="5"  y1="8"  x2="37" y2="8"  strokeWidth="2.2" />
-      <line x1="5"  y1="8"  x2="5"  y2="40" strokeWidth="2"   />
-      <line x1="37" y1="8"  x2="37" y2="40" strokeWidth="2"   />
-      {/* Hanging cord */}
-      <line x1="21" y1="8"  x2="21" y2="13" strokeWidth="1.5" />
-      {/* Gong disc — outer ring */}
-      <circle cx="21" cy="26" r="12" strokeWidth="2.2" />
-      {/* Gong disc — inner strike point */}
-      <circle cx="21" cy="26" r="4"  strokeWidth="1.5" />
-      {/* Mallet handle (angled, resting against right post) */}
-      <line x1="38" y1="35" x2="48" y2="22" strokeWidth="2" />
-      {/* Mallet head (solid) */}
-      <circle cx="48" cy="21" r="4" fill="currentColor" stroke="none" />
-    </>
-  );
-}
-
-function TomatoPaths() {
-  return (
-    <>
-      {/* Tomato body */}
-      <circle cx="22" cy="28" r="15" strokeWidth="2.2" />
-      {/* Stem (slight curve to upper-right) */}
-      <path d="M22,13 C23,10 25,8 24,5" strokeWidth="1.8" fill="none" />
-      {/* Calyx leaves */}
-      <path d="M22,13 C18,11 15,13 17,16" strokeWidth="1.5" fill="none" />
-      <path d="M22,13 C26,11 29,13 27,16" strokeWidth="1.5" fill="none" />
-      {/* Clock tick marks at 12, 3, 6, 9 */}
-      <line x1="22" y1="15" x2="22" y2="18" strokeWidth="1.5" />
-      <line x1="35" y1="28" x2="32" y2="28" strokeWidth="1.5" />
-      <line x1="22" y1="41" x2="22" y2="38" strokeWidth="1.5" />
-      <line x1="9"  y1="28" x2="12" y2="28" strokeWidth="1.5" />
-      {/* Clock hands: minute (pointing to 12), hour (pointing to ~2) */}
-      <line x1="22" y1="28" x2="22" y2="18" strokeWidth="2"   />
-      <line x1="22" y1="28" x2="30" y2="23" strokeWidth="1.8" />
-      {/* Center pivot (solid) */}
-      <circle cx="22" cy="28" r="1.5" fill="currentColor" stroke="none" />
-    </>
-  );
-}
-
-// ── Standalone icons ───────────────────────────────────────────────────────────
+// ── Image icons ────────────────────────────────────────────────────────────────
 
 function GongIcon() {
   return (
-    <svg
-      viewBox="0 0 52 44"
-      width="52"
-      height="44"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <GongPaths />
-    </svg>
+    <img src="/images/gong.png" alt="Gong" className="h-20 w-auto object-contain" />
   );
 }
 
 function TomatoIcon() {
   return (
-    <svg
-      viewBox="0 0 44 44"
-      width="44"
-      height="44"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <TomatoPaths />
-    </svg>
+    <img src="/images/tomato.png" alt="Tomato timer" className="h-20 w-auto object-contain" />
   );
 }
 
-/**
- * Gong + "+" + tomato side by side at 68% scale (84×44).
- * SVG transforms apply right-to-left: translate(tx,ty) scale(s)
- * means point (x,y) → (s·x + tx,  s·y + ty).
- *
- * Gong  52×44 @ 0.68 → 35.4×29.9  placed at (0, 7)  spans x 0–35  y 7–37
- * Plus  10×10         centered at (43, 22)
- * Tomato 44×44 @ 0.68 → 29.9×29.9  placed at (52, 7) spans x 52–82 y 7–37
- */
 function BothIcon() {
   return (
-    <svg
-      viewBox="0 0 84 44"
-      width="84"
-      height="44"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <g transform="translate(0, 7) scale(0.68)">
-        <GongPaths />
-      </g>
-
-      {/* Plus sign */}
-      <line x1="38" y1="22" x2="48" y2="22" strokeWidth="2.2" />
-      <line x1="43" y1="17" x2="43" y2="27" strokeWidth="2.2" />
-
-      <g transform="translate(52, 7) scale(0.68)">
-        <TomatoPaths />
-      </g>
-    </svg>
+    <div className="flex items-center gap-2">
+      <img src="/images/gong.png" alt="Gong" className="h-12 w-auto object-contain" />
+      <span className="text-xl font-light text-gray-500">+</span>
+      <img src="/images/tomato.png" alt="Tomato timer" className="h-12 w-auto object-contain" />
+    </div>
   );
 }
 
@@ -210,7 +113,7 @@ export default function ModeSelect({ onSelect }: { onSelect: (mode: AppMode) => 
           {modes.map((m) => (
             <Card key={m.key} onClick={() => onSelect(m.key)}>
               <div className="flex items-center gap-4">
-                <div className="shrink-0 text-indigo-600">{m.icon}</div>
+                <div className="shrink-0">{m.icon}</div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800">{m.title}</h3>
                   <p className="text-sm text-gray-500">{m.description}</p>

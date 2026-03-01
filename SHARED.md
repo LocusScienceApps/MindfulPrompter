@@ -187,6 +187,36 @@ public/
 8. Update `src/components/screens/SessionComplete.tsx` — larger popup, detailed stats, auto-dismiss
 9. Test all three modes end-to-end before proceeding to Phase 2
 
+### Session 7 — 2026-03-01 (UX polish: icons, keyboard, button color, textarea)
+**What was done:**
+- Replaced hand-drawn SVG icons on landing page with real photos (`public/images/gong.png`, `public/images/tomato.png`). "Both Together" card shows gong + "+" + tomato at smaller scale.
+- Changed primary Button color from indigo to emerald green — now visually distinct from the indigo YesNo toggles (selected-state indicator) so it's clear which button Enter will activate.
+- Added Enter key shortcut to DefaultsReview (triggers Start Session) and Customize (triggers Review Changes or No-changes Start Session). Guarded so Enter inside any input/textarea/select/button does NOT trigger the shortcut.
+- Fixed mindfulness prompt textarea: was pre-filled with the default text; now starts empty and shows the default as grayed-out placeholder text, consistent with all other fields.
+
+**Current state:**
+- All changes committed. Build not verified this session — run `npm run build` to confirm.
+- No regression testing done. Needs full end-to-end test of all three modes.
+
+**Next steps for AI (start here next session):**
+1. **FIRST: Service worker cache** — DevTools → Application → Service Workers → Unregister → Ctrl+Shift+R
+2. **Test all three modes** end-to-end:
+   - Mindfulness: prompt count 0 (indefinite) and N; interval validation (must divide 60)
+   - Pomodoro: single set, multiple sets, unlimited sets (numberOfSets=0)
+   - Both Together: interval must fit evenly into work session
+   - Presets: save, load, rename, delete
+   - Reset to original defaults: confirmation, reverts correctly
+   - Settings Updated flow: Save as Preset / Save as Default / Start Session
+   - "No changes made — Start Session": verify skips review page
+   - Enter key: test on mode page and settings page, verify it doesn't fire inside text fields
+3. Fix any bugs found.
+4. **After all tests pass → Phase 2**: Tauri wrapper + blocking native popup + cowork via Firebase
+
+**Open questions:**
+- None carried forward.
+
+---
+
 ### Session 6 — 2026-03-01 (UI/UX overhaul, Phase 1 still in progress)
 **What was done:**
 - Redesigned landing page (ModeSelect.tsx):

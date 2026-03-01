@@ -22,7 +22,7 @@ export default function Button({
 
   const variants = {
     primary:
-      'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 active:bg-indigo-800',
+      'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500 active:bg-emerald-800',
     secondary:
       'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-indigo-500 active:bg-gray-100',
     ghost:

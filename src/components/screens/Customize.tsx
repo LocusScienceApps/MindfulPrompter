@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Settings } from '@/lib/types';
 import {
   defaultBreakMinutes,
@@ -32,6 +32,14 @@ export default function Customize({
   const [intervalError, setIntervalError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Factory defaults for placeholder hints
+  const factory = getDefaults(initial.mode);
+
+  // Textarea tracks its own display value so it can show placeholder when equal to factory default
+  const [promptRaw, setPromptRaw] = useState(
+    initial.promptText === factory.promptText ? '' : initial.promptText
+  );
+
   const { mode } = s;
 
   const update = (partial: Partial<Settings>) => {
@@ -49,9 +57,6 @@ export default function Customize({
   const derivedBreak = defaultBreakMinutes(s.workMinutes);
   const derivedLongBreak = defaultLongBreakMinutes(s.breakMinutes);
   const derivedInterval = defaultPromptInterval(s.workMinutes);
-
-  // Factory defaults for placeholder hints
-  const factory = getDefaults(mode);
 
   const handleAction = () => {
     // Validate prompt interval
@@ -76,6 +81,19 @@ export default function Customize({
       onDone(s);
     }
   };
+
+  const handleActionRef = useRef(handleAction);
+  handleActionRef.current = handleAction;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+      handleActionRef.current();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -231,9 +249,12 @@ export default function Customize({
             helper='Default: "Are you doing what you should be doing?"'
           >
             <textarea
-              value={s.promptText}
-              onChange={(e) => update({ promptText: e.target.value })}
-              placeholder="Are you doing what you should be doing?"
+              value={promptRaw}
+              onChange={(e) => {
+                setPromptRaw(e.target.value);
+                update({ promptText: e.target.value || factory.promptText });
+              }}
+              placeholder={factory.promptText}
               rows={3}
               className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />

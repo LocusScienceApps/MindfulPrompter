@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Settings, PresetSlot } from '@/lib/types';
 import { listPresetsForMode, renamePreset, deletePreset } from '@/lib/storage';
 import { formatNum } from '@/lib/format';
@@ -35,6 +35,19 @@ export default function DefaultsReview({
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
 
   const refreshPresets = () => setPresets(listPresetsForMode(mode));
+
+  const onStartRef = useRef(onStart);
+  onStartRef.current = onStart;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+      onStartRef.current();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   const handleLoad = (slot: PresetSlot) => {
     const preset = presets.find((p) => p.slot === slot);

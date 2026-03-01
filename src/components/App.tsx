@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import type { AppMode, Screen, Settings, SessionStats } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
-import { getDefaultsForMode, saveDefaultsForMode } from '@/lib/storage';
+import { getDefaultsForMode, saveDefaultsForMode, clearDefaultsForMode } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
 import ModeSelect from './screens/ModeSelect';
 import DefaultsReview from './screens/DefaultsReview';
 import Customize from './screens/Customize';
-import Summary from './screens/Summary';
+import SettingsUpdated from './screens/Summary';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
 
@@ -35,17 +35,34 @@ export default function App() {
     setScreen('defaults-review');
   };
 
+  // "Start Session" on defaults-review — go directly to timer, skip review
   const handleStartWithDefaults = () => {
-    setScreen('summary');
+    setSessionStats(null);
+    setScreen('timer');
   };
 
   const handleCustomize = () => {
     setScreen('customize');
   };
 
+  // "Review Changes" — show the settings-updated review page
   const handleCustomizeDone = (customSettings: Settings) => {
     setSettings(customSettings);
-    setScreen('summary');
+    setScreen('settings-updated');
+  };
+
+  // "No changes made — Start Session" — skip review, go straight to timer
+  const handleStartDirectly = (customSettings: Settings) => {
+    setSettings(customSettings);
+    setSessionStats(null);
+    setScreen('timer');
+  };
+
+  // Reset to original defaults: clear saved overrides, reload factory, return to mode page
+  const handleResetToOriginal = () => {
+    clearDefaultsForMode(mode);
+    setSettings(getSettingsForMode(mode));
+    setScreen('defaults-review');
   };
 
   const handleSaveAsDefault = (s: Settings) => {
@@ -56,7 +73,7 @@ export default function App() {
 
   const handleLoadPreset = (presetSettings: Settings) => {
     setSettings(presetSettings);
-    // Stay on defaults-review, which will re-render with the loaded settings
+    // Stay on defaults-review; it re-renders with the loaded settings
   };
 
   const handleBeginSession = () => {
@@ -93,7 +110,6 @@ export default function App() {
             settings={settings}
             onStart={handleStartWithDefaults}
             onCustomize={handleCustomize}
-            onEditDefaults={handleCustomize}
             onLoadPreset={handleLoadPreset}
             onBack={() => handleBack('mode-select')}
           />
@@ -102,14 +118,16 @@ export default function App() {
           <Customize
             settings={settings}
             onDone={handleCustomizeDone}
-            onSaveAsDefault={handleSaveAsDefault}
+            onStartDirectly={handleStartDirectly}
+            onResetToOriginal={handleResetToOriginal}
             onBack={() => handleBack('defaults-review')}
           />
         )}
-        {screen === 'summary' && (
-          <Summary
+        {screen === 'settings-updated' && (
+          <SettingsUpdated
             settings={settings}
             onBegin={handleBeginSession}
+            onSaveAsDefault={handleSaveAsDefault}
             onBack={() => handleBack('customize')}
           />
         )}

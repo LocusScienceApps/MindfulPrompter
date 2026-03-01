@@ -187,6 +187,54 @@ public/
 8. Update `src/components/screens/SessionComplete.tsx` — larger popup, detailed stats, auto-dismiss
 9. Test all three modes end-to-end before proceeding to Phase 2
 
+### Session 6 — 2026-03-01 (UI/UX overhaul, Phase 1 still in progress)
+**What was done:**
+- Redesigned landing page (ModeSelect.tsx):
+  - New two-line tagline with hoverable tooltip links (Pomodoro Technique, Nudge theory)
+  - "Choose your mode:" heading replaces old question
+  - Updated mode descriptions to be clearer and more specific
+  - Replaced emoji icons with custom SVG icons (gong, tomato timer, combined)
+  - NOTE: User was dissatisfied with SVG icon quality — needs redoing (see Next Steps)
+- Major UX flow refactoring (all screens):
+  - Deleted "Ready to Start" (Summary) review screen — "Start Session" goes directly to timer
+  - Mode page (DefaultsReview): mode name in indigo + gray "Mode" suffix; "Start Session" + "Change Settings" buttons; removed "Edit defaults" and "Reset to factory defaults" links
+  - "Change Settings" (Customize): converted from 5-step paginated wizard to single scrollable page with consistent formatting; "Reset to original defaults" button at top (grayed out with tooltip if already on originals, confirmation dialog if active); dynamic bottom button ("No changes made — Start Session" vs "Review Changes")
+  - New "Settings Updated" page (Summary.tsx): shows mode name + "Mode Settings Updated" title, full settings summary, then "Save as a Preset" / "Save as Default" (with confirmation) / "Start Session (use new settings for this session only)"
+  - Updated App.tsx navigation to wire the new flow
+  - Renamed all "factory defaults" → "original defaults" throughout
+  - Removed the now-unused Summary ("Ready to Start") page concept; repurposed file
+
+**Current state:**
+- Build should pass (not verified this session — do `npm run build` to confirm)
+- All UX changes are uncommitted as of session end — commit is happening now
+- SVG icons are placeholder quality and need proper redoing next session
+- No regression testing has been done on the new flow
+
+**Next steps for AI (start here next session):**
+1. **FIRST: Service worker cache** — before testing ANYTHING, open DevTools → Application → Service Workers → Unregister → Ctrl+Shift+R
+2. **Fix SVG icons** — user was dissatisfied. Options to consider:
+   - Use an established icon library (Lucide React, Heroicons) — cleaner, consistent, maintained
+   - Or redesign the custom SVGs with better proportions and details
+   - Gong: large disc on a goalpost frame with mallet beside it
+   - Tomato: round body + stem/leaves + clock face (4 ticks + 2 hands)
+   - Both: gong + "+" + tomato at reduced scale, same height as singles
+3. **Keyboard accessibility** — pressing Enter on a focused button should activate it. The Card component has a basic keyDown handler; verify all interactive elements (buttons, card options) respond correctly to Enter and Space. Check especially the mode cards on the landing page and the Yes/No toggles in Change Settings.
+4. **Testing** — test all three modes end-to-end:
+   - Mindfulness: prompt count 0 (indefinite) and N (stops after N prompts); interval validation (must divide 60)
+   - Pomodoro: single set, multiple sets, unlimited sets (numberOfSets=0)
+   - Both Together: interval must fit evenly into work session
+   - Presets: save, load, rename, delete
+   - Reset to original defaults: confirmation, reverts correctly, returns to mode page
+   - Settings Updated flow: Save as Preset → slot picker → saves; Save as Default → confirmation → updates mode page; Start Session → goes directly to timer
+   - "No changes made — Start Session" button: verify it actually skips the review page
+5. **Bug fixes** — fix whatever testing reveals
+6. **After all tests pass → Phase 2**: Tauri wrapper + blocking native popup + cowork via Firebase
+
+**Open questions:**
+- Should we use a React icon library (Lucide, Heroicons) instead of hand-drawing SVGs? Would save time and look more professional.
+
+---
+
 ### Session 3 — 2026-02-28 (Phase 1 coding complete)
 **What was done:**
 - Read batch file (Session 3 rewrite) in full — understood all features

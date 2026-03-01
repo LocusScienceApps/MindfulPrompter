@@ -58,7 +58,7 @@ export type Screen =
   | 'mode-select'
   | 'defaults-review'
   | 'customize'
-  | 'summary'
+  | 'settings-updated'
   | 'timer'
   | 'session-complete';
 

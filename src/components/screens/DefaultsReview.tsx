@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Settings, PresetSlot } from '@/lib/types';
-import { listPresetsForMode, renamePreset, deletePreset, clearDefaultsForMode } from '@/lib/storage';
+import { listPresetsForMode, renamePreset, deletePreset } from '@/lib/storage';
 import { formatNum } from '@/lib/format';
 import Button from '../ui/Button';
 
@@ -10,29 +10,28 @@ interface DefaultsReviewProps {
   settings: Settings;
   onStart: () => void;
   onCustomize: () => void;
-  onEditDefaults: () => void;
   onLoadPreset: (settings: Settings) => void;
   onBack: () => void;
 }
+
+const MODE_NAMES: Record<string, string> = {
+  mindfulness: 'Mindfulness Prompts',
+  pomodoro: 'Pomodoro Timer',
+  both: 'Both Together',
+};
 
 export default function DefaultsReview({
   settings,
   onStart,
   onCustomize,
-  onEditDefaults,
   onLoadPreset,
   onBack,
 }: DefaultsReviewProps) {
   const { mode } = settings;
   const [showPresets, setShowPresets] = useState(false);
-  // Local copy of presets so rename/delete updates are reflected immediately
   const [presets, setPresets] = useState(() => listPresetsForMode(mode));
-
-  // Rename state
   const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
   const [renameValue, setRenameValue] = useState('');
-
-  // Delete confirmation state
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
 
   const refreshPresets = () => setPresets(listPresetsForMode(mode));
@@ -71,10 +70,7 @@ export default function DefaultsReview({
     }
   };
 
-  const handleFactoryReset = () => {
-    clearDefaultsForMode(mode);
-    onBack();
-  };
+  const modeName = MODE_NAMES[mode] ?? mode;
 
   return (
     <div className="space-y-6">
@@ -86,17 +82,15 @@ export default function DefaultsReview({
       </button>
 
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {mode === 'mindfulness' && 'Mindfulness Mode'}
-          {mode === 'pomodoro' && 'Pomodoro Mode'}
-          {mode === 'both' && 'Pomodoro + Mindfulness'}
+        <h2 className="text-2xl font-bold leading-tight">
+          <span className="text-indigo-600">{modeName}</span>
+          <span className="text-gray-400 font-normal text-xl"> Mode</span>
         </h2>
         <p className="mt-1 text-gray-500">Current settings</p>
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <dl className="space-y-3">
-          {/* Pomodoro settings */}
           {(mode === 'pomodoro' || mode === 'both') && (
             <>
               <SettingRow label="Work sessions" value={`${formatNum(settings.workMinutes)} minutes`} />
@@ -114,27 +108,19 @@ export default function DefaultsReview({
             </>
           )}
 
-          {/* Mindfulness settings */}
           {(mode === 'mindfulness' || mode === 'both') && (
             <>
-              <SettingRow
-                label="Mindfulness prompt"
-                value={`"${settings.promptText}"`}
-              />
-              <SettingRow
-                label="Prompt every"
-                value={`${formatNum(settings.promptIntervalMinutes)} minutes`}
-              />
-              <SettingRow
-                label="Dismiss delay"
-                value={`${settings.dismissSeconds} seconds`}
-              />
+              <SettingRow label="Mindfulness prompt" value={`"${settings.promptText}"`} />
+              <SettingRow label="Prompt every" value={`${formatNum(settings.promptIntervalMinutes)} minutes`} />
+              <SettingRow label="Dismiss delay" value={`${settings.dismissSeconds} seconds`} />
               {mode === 'mindfulness' && (
                 <SettingRow
                   label="Runs"
-                  value={settings.promptCount > 0
-                    ? `${settings.promptCount} prompt${settings.promptCount !== 1 ? 's' : ''} then stops`
-                    : 'Indefinitely (until stopped)'}
+                  value={
+                    settings.promptCount > 0
+                      ? `${settings.promptCount} prompt${settings.promptCount !== 1 ? 's' : ''} then stops`
+                      : 'Indefinitely (until stopped)'
+                  }
                 />
               )}
             </>
@@ -144,7 +130,7 @@ export default function DefaultsReview({
         </dl>
       </div>
 
-      {/* Preset list (inline, shown when toggled) */}
+      {/* Preset list */}
       {showPresets && (
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
           <p className="mb-3 text-sm font-semibold text-indigo-700">Saved presets</p>
@@ -158,7 +144,6 @@ export default function DefaultsReview({
                   className="rounded-lg border border-indigo-200 bg-white px-3 py-2"
                 >
                   {renamingSlot === slot ? (
-                    /* Inline rename editor */
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
@@ -185,7 +170,6 @@ export default function DefaultsReview({
                       </button>
                     </div>
                   ) : (
-                    /* Normal row */
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleLoad(slot)}
@@ -232,10 +216,10 @@ export default function DefaultsReview({
 
       <div className="flex flex-col gap-3">
         <Button onClick={onStart} className="w-full text-lg">
-          Start
+          Start Session
         </Button>
         <Button onClick={onCustomize} variant="secondary" className="w-full">
-          Customize for this session
+          Change Settings
         </Button>
         {presets.length > 0 && !showPresets && (
           <Button
@@ -243,21 +227,9 @@ export default function DefaultsReview({
             variant="secondary"
             className="w-full"
           >
-            Load preset
+            Load Preset
           </Button>
         )}
-        <button
-          onClick={onEditDefaults}
-          className="text-sm text-gray-500 hover:text-gray-700 underline"
-        >
-          Edit defaults for this mode
-        </button>
-        <button
-          onClick={handleFactoryReset}
-          className="text-sm text-gray-400 hover:text-gray-600 underline"
-        >
-          Reset to factory defaults
-        </button>
       </div>
     </div>
   );

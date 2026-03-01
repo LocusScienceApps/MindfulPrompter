@@ -5,6 +5,7 @@ import type { Settings, TimerEvent, SessionStats } from '@/lib/types';
 import { computeSchedule } from '@/lib/schedule';
 import { formatCountdown } from '@/lib/format';
 import { initAudio, playChime } from '@/lib/sound';
+import { isTauri, showNotificationWindow, onNotificationDismissed } from '@/lib/tauri';
 import ProgressRing from '../ui/ProgressRing';
 import Button from '../ui/Button';
 import NotificationOverlay from '../NotificationOverlay';
@@ -171,6 +172,20 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
     requestNotificationPermission();
   }, []);
 
+  // In Tauri: listen for the native popup being dismissed
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    onNotificationDismissed((eventType) => {
+      if (eventType === 'session_complete') {
+        onSessionComplete(buildStats());
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => { unlisten?.(); };
+  }, [onSessionComplete, buildStats]);
+
   // Start the interval timer — re-creates on strict mode remount but uses stable start time
   useEffect(() => {
     const schedule = computeSchedule(settings);
@@ -209,7 +224,18 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
           }
 
           setCurrentEvent(event);
-          setShowOverlay(true);
+
+          if (isTauri()) {
+            showNotificationWindow(
+              event.type,
+              event.title,
+              event.body,
+              event.promptText,
+              settingsRef.current.dismissSeconds,
+            ).catch(console.error);
+          } else {
+            setShowOverlay(true);
+          }
 
           // Play sound
           if (settingsRef.current.playSound) {
@@ -262,6 +288,10 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
+    }
+    // Close the native popup window if one is open
+    if (isTauri()) {
+      import('@tauri-apps/api/event').then(({ emit }) => emit('session-stopped', {})).catch(() => {});
     }
     onStop(buildStats());
   };

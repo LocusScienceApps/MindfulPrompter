@@ -187,6 +187,47 @@ public/
 8. Update `src/components/screens/SessionComplete.tsx` — larger popup, detailed stats, auto-dismiss
 9. Test all three modes end-to-end before proceeding to Phase 2
 
+### Session 9 — 2026-03-01 (Tauri wrapper — popup blocked)
+**What was done:**
+- Installed Rust, MSVC build tools (Visual Studio 2022 Desktop C++ workload), Tauri CLI
+- Added `src-tauri/` folder to the project (Tauri scaffold)
+- Created `src-tauri/src/lib.rs` — Rust backend with two commands:
+  - `show_notification`: stores popup data in managed state, closes existing popup window, opens new native window always-on-top
+  - `get_notification_data`: returns the stored popup data so the popup page can fetch it
+- Created `src/app/popup/page.tsx` — the native popup UI (gradient card, prompt text, countdown, dismiss button)
+- Created `src/lib/tauri.ts` — bridge utility: `isTauri()`, `showNotificationWindow()`, `onNotificationDismissed()`
+- Modified `src/components/screens/Timer.tsx` — calls `showNotificationWindow()` in Tauri, `setShowOverlay()` in browser
+- Updated `src-tauri/capabilities/default.json` to include "notification" window
+- Set app identifier to `com.locusscienceapps.mindfulprompter`
+- Added `url = "2"` to Cargo.toml, `@tauri-apps/api` to package.json
+- Set up PowerShell profile to add cargo to PATH permanently
+- Fixed Rust borrow error: clone strings before storing in state so originals are available for URL params
+
+**Debugging history (blank popup window):**
+1. First attempt: `WebviewUrl::App("popup/index.html")` — only works for static builds, not dev server
+2. Second attempt: `WebviewUrl::External("http://localhost:3000/popup")` — page loads but blank
+3. Third attempt: pass data via URL query params so popup doesn't depend on IPC to display content
+   - Rust builds URL: `http://localhost:3000/popup?eventType=...&title=...&promptText=...`
+   - Popup reads `window.location.search` in `useEffect`
+   - This compiled successfully but **was not tested** before user went to sleep
+
+**Current state:**
+- Main Tauri window: working
+- Popup window: opens, but shows blank white — latest fix (URL params) compiled, not yet tested
+- **COMMITTED** — partial progress; popup still shows blank white
+
+**Next steps for AI (start here next session):**
+1. Launch app: `export PATH="$PATH:/c/Users/wmben/.cargo/bin" && npm run tauri dev`
+2. Test the popup — the URL params fix is compiled and waiting. Trigger a notification.
+3. If still blank: open `http://localhost:3000/popup?eventType=mindfulness&title=Test&body=&promptText=Take%20a%20breath&dismissSeconds=5` directly in a browser to determine if issue is Tauri-specific or Next.js-specific
+4. Once popup shows content: test OK dismiss, session-stopped auto-close, session_complete transition
+5. Commit everything once popup is fully working
+
+**Open questions:**
+- Does Tauri inject its IPC bridge into dynamically-created windows with `WebviewUrl::External`? (The URL params approach sidesteps this for data display, but dismiss/events still need IPC)
+
+---
+
 ### Session 8 — 2026-03-01 (bug fixes + Schedule Start Time feature)
 **What was done:**
 - **Bug fix — notification overlay:** Enter key now dismisses popup once countdown expires. OK button turns emerald green when dismissible (was white).

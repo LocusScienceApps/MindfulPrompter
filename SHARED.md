@@ -187,6 +187,25 @@ public/
 8. Update `src/components/screens/SessionComplete.tsx` — larger popup, detailed stats, auto-dismiss
 9. Test all three modes end-to-end before proceeding to Phase 2
 
+### Session 8 — 2026-03-01 (bug fixes + Schedule Start Time feature)
+**What was done:**
+- **Bug fix — notification overlay:** Enter key now dismisses popup once countdown expires. OK button turns emerald green when dismissible (was white).
+- **Bug fix — Change Settings defaults:** All fields (helper text + placeholders) now correctly reference the user's saved defaults instead of factory defaults. Fixed: work session, sessions per set, number of sets, dismiss delay, prompt interval (mindfulness), prompt count, and mindfulness prompt textarea. Removed now-unused `factory` variable and `getDefaults` import from Customize.tsx.
+- **New feature — Schedule Start Time:** Added a "Schedule Start Time" button on the mode page (DefaultsReview), Customize screen, and Settings Updated screen. Navigates to a new ScheduledStart screen (`src/components/screens/ScheduledStart.tsx`) that shows: a time picker, a live countdown in large green text, and a settings summary. Auto-starts the timer when countdown hits 0. "Start Now" starts immediately. Capped at 2 hours in the future. Useful for cowork sessions where everyone needs to sync to a fixed clock time.
+
+**Current state:**
+- All changes committed and pushed. Build passes cleanly.
+- Tested by user — all features working.
+
+**Next steps for AI (start here next session):**
+1. **FIRST: Service worker cache** — DevTools → Application → Service Workers → Unregister → Ctrl+Shift+R
+2. **Phase 2: Tauri wrapper** — see SHARED.md Phase 2 section for full plan.
+
+**Open questions:**
+- None carried forward.
+
+---
+
 ### Session 7 — 2026-03-01 (UX polish: icons, keyboard, button color, textarea)
 **What was done:**
 - Replaced hand-drawn SVG icons on landing page with real photos (`public/images/gong.png`, `public/images/tomato.png`). "Both Together" card shows gong + "+" + tomato at smaller scale.

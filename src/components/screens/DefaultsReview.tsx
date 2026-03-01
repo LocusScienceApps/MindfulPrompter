@@ -9,6 +9,7 @@ import Button from '../ui/Button';
 interface DefaultsReviewProps {
   settings: Settings;
   onStart: () => void;
+  onSchedule: () => void;
   onCustomize: () => void;
   onLoadPreset: (settings: Settings) => void;
   onBack: () => void;
@@ -23,6 +24,7 @@ const MODE_NAMES: Record<string, string> = {
 export default function DefaultsReview({
   settings,
   onStart,
+  onSchedule,
   onCustomize,
   onLoadPreset,
   onBack,
@@ -230,6 +232,9 @@ export default function DefaultsReview({
       <div className="flex flex-col gap-3">
         <Button onClick={onStart} className="w-full text-lg">
           Start Session
+        </Button>
+        <Button onClick={onSchedule} variant="secondary" className="w-full">
+          Schedule Start Time
         </Button>
         <Button onClick={onCustomize} variant="secondary" className="w-full">
           Change Settings

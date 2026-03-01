@@ -40,6 +40,17 @@ export default function NotificationOverlay({
     }
   }, [countdown, onDismiss]);
 
+  // Allow Enter key to dismiss once the button is active
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && countdown <= 0) {
+        onDismiss();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [countdown, onDismiss]);
+
   if (!event) return null;
 
   // Pick a color based on event type
@@ -88,7 +99,7 @@ export default function NotificationOverlay({
           className={`mt-6 w-full rounded-xl py-3 text-lg font-semibold transition-all ${
             countdown > 0
               ? 'cursor-not-allowed bg-white/20 text-white/70'
-              : 'bg-white text-gray-800 hover:bg-gray-100 active:bg-gray-200'
+              : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
           }`}
         >
           {countdown > 0 ? `Wait (${countdown}s)...` : 'OK'}

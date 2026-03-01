@@ -59,6 +59,7 @@ export type Screen =
   | 'defaults-review'
   | 'customize'
   | 'settings-updated'
+  | 'scheduled-start'
   | 'timer'
   | 'session-complete';
 

@@ -9,6 +9,7 @@ import ModeSelect from './screens/ModeSelect';
 import DefaultsReview from './screens/DefaultsReview';
 import Customize from './screens/Customize';
 import SettingsUpdated from './screens/Summary';
+import ScheduledStart from './screens/ScheduledStart';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
 
@@ -39,6 +40,15 @@ export default function App() {
   const handleStartWithDefaults = () => {
     setSessionStats(null);
     setScreen('timer');
+  };
+
+  const handleSchedule = () => {
+    setScreen('scheduled-start');
+  };
+
+  const handleScheduleWithSettings = (s: Settings) => {
+    setSettings(s);
+    setScreen('scheduled-start');
   };
 
   const handleCustomize = () => {
@@ -109,9 +119,17 @@ export default function App() {
           <DefaultsReview
             settings={settings}
             onStart={handleStartWithDefaults}
+            onSchedule={handleSchedule}
             onCustomize={handleCustomize}
             onLoadPreset={handleLoadPreset}
             onBack={() => handleBack('mode-select')}
+          />
+        )}
+        {screen === 'scheduled-start' && (
+          <ScheduledStart
+            settings={settings}
+            onStart={handleStartWithDefaults}
+            onBack={() => handleBack('defaults-review')}
           />
         )}
         {screen === 'customize' && (
@@ -119,6 +137,7 @@ export default function App() {
             settings={settings}
             onDone={handleCustomizeDone}
             onStartDirectly={handleStartDirectly}
+            onSchedule={handleScheduleWithSettings}
             onResetToOriginal={handleResetToOriginal}
             onBack={() => handleBack('defaults-review')}
           />
@@ -127,6 +146,7 @@ export default function App() {
           <SettingsUpdated
             settings={settings}
             onBegin={handleBeginSession}
+            onSchedule={handleSchedule}
             onSaveAsDefault={handleSaveAsDefault}
             onBack={() => handleBack('customize')}
           />

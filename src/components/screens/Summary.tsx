@@ -10,6 +10,7 @@ import Button from '../ui/Button';
 interface SettingsUpdatedProps {
   settings: Settings;
   onBegin: () => void;
+  onSchedule: () => void;
   onSaveAsDefault: (s: Settings) => void;
   onBack: () => void;
 }
@@ -25,6 +26,7 @@ type SubView = null | 'preset-picker' | 'save-default-confirm';
 export default function SettingsUpdated({
   settings: s,
   onBegin,
+  onSchedule,
   onSaveAsDefault,
   onBack,
 }: SettingsUpdatedProps) {
@@ -218,6 +220,10 @@ export default function SettingsUpdated({
 
         <Button onClick={onBegin} className="w-full">
           Start Session (use new settings for this session only)
+        </Button>
+
+        <Button onClick={onSchedule} variant="secondary" className="w-full">
+          Schedule Start Time (use new settings for this session only)
         </Button>
       </div>
     </div>

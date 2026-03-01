@@ -6,7 +6,6 @@ import {
   defaultBreakMinutes,
   defaultLongBreakMinutes,
   defaultPromptInterval,
-  getDefaults,
 } from '@/lib/defaults';
 import { getDefaultsForMode } from '@/lib/storage';
 import { formatNum } from '@/lib/format';
@@ -17,6 +16,7 @@ interface CustomizeProps {
   settings: Settings;
   onDone: (settings: Settings) => void;           // "Review Changes" → settings-updated
   onStartDirectly: (settings: Settings) => void;  // "No changes — Start Session"
+  onSchedule: (settings: Settings) => void;       // "Schedule Start Time"
   onResetToOriginal: () => void;                  // After reset confirmation → defaults-review
   onBack: () => void;
 }
@@ -25,6 +25,7 @@ export default function Customize({
   settings: initial,
   onDone,
   onStartDirectly,
+  onSchedule,
   onResetToOriginal,
   onBack,
 }: CustomizeProps) {
@@ -32,13 +33,7 @@ export default function Customize({
   const [intervalError, setIntervalError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  // Factory defaults for placeholder hints
-  const factory = getDefaults(initial.mode);
-
-  // Textarea tracks its own display value so it can show placeholder when equal to factory default
-  const [promptRaw, setPromptRaw] = useState(
-    initial.promptText === factory.promptText ? '' : initial.promptText
-  );
+  const [promptRaw, setPromptRaw] = useState('');
 
   const { mode } = s;
 
@@ -150,11 +145,11 @@ export default function Customize({
         <Section title="Pomodoro Settings">
           <SettingField
             label="Work session length"
-            helper={`Default: ${formatNum(factory.workMinutes)} minutes`}
+            helper={`Default: ${formatNum(initial.workMinutes)} minutes`}
           >
             <NumericInput
               value={s.workMinutes}
-              defaultValue={factory.workMinutes}
+              defaultValue={initial.workMinutes}
               unit="minutes"
               onChange={(v) =>
                 update({
@@ -184,11 +179,11 @@ export default function Customize({
 
           <SettingField
             label='Work sessions ("pomodoros") per set'
-            helper="Default: 4"
+            helper={`Default: ${initial.sessionsPerSet}`}
           >
             <NumericInput
               value={s.sessionsPerSet}
-              defaultValue={4}
+              defaultValue={initial.sessionsPerSet}
               unit="sessions"
               integerOnly
               onChange={(v) => update({ sessionsPerSet: v })}
@@ -220,11 +215,11 @@ export default function Customize({
 
               <SettingField
                 label="Number of sets"
-                helper="Default: 3. Enter 0 to run until you stop."
+                helper={`Default: ${initial.numberOfSets}. Enter 0 to run until you stop.`}
               >
                 <NumericInput
                   value={s.numberOfSets}
-                  defaultValue={3}
+                  defaultValue={initial.numberOfSets}
                   unit="sets"
                   integerOnly
                   allowZero
@@ -252,9 +247,9 @@ export default function Customize({
               value={promptRaw}
               onChange={(e) => {
                 setPromptRaw(e.target.value);
-                update({ promptText: e.target.value || factory.promptText });
+                update({ promptText: e.target.value || initial.promptText });
               }}
-              placeholder={factory.promptText}
+              placeholder={initial.promptText}
               rows={3}
               className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
@@ -265,12 +260,12 @@ export default function Customize({
             helper={
               mode === 'both'
                 ? `Must fit evenly into your ${formatNum(s.workMinutes)}-minute work session. Default: ${formatNum(derivedInterval)} minutes.`
-                : 'Must divide evenly into 60 minutes. Default: 15 minutes.'
+                : `Must divide evenly into 60 minutes. Default: ${formatNum(initial.promptIntervalMinutes)} minutes.`
             }
           >
             <NumericInput
               value={s.promptIntervalMinutes}
-              defaultValue={mode === 'both' ? derivedInterval : 15}
+              defaultValue={mode === 'both' ? derivedInterval : initial.promptIntervalMinutes}
               unit="minutes"
               onChange={(v) => {
                 update({ promptIntervalMinutes: v });
@@ -282,11 +277,11 @@ export default function Customize({
 
           <SettingField
             label="Dismiss delay"
-            helper="How long the prompt stays on screen before you can dismiss it. Default: 15 seconds."
+            helper={`How long the prompt stays on screen before you can dismiss it. Default: ${initial.dismissSeconds} seconds.`}
           >
             <NumericInput
               value={s.dismissSeconds}
-              defaultValue={15}
+              defaultValue={initial.dismissSeconds}
               unit="seconds"
               integerOnly
               onChange={(v) => update({ dismissSeconds: v })}
@@ -296,11 +291,11 @@ export default function Customize({
           {mode === 'mindfulness' && (
             <SettingField
               label="Number of prompts"
-              helper="Default: 0 (runs indefinitely). Enter a number to stop after that many prompts."
+              helper={`Default: ${initial.promptCount === 0 ? '0 (runs indefinitely)' : initial.promptCount}. Enter a number to stop after that many prompts.`}
             >
               <NumericInput
                 value={s.promptCount}
-                defaultValue={0}
+                defaultValue={initial.promptCount}
                 unit="prompts"
                 integerOnly
                 allowZero
@@ -329,10 +324,15 @@ export default function Customize({
         </SettingField>
       </Section>
 
-      {/* Bottom action */}
-      <Button onClick={handleAction} className="w-full text-lg">
-        {hasChanges ? 'Review Changes' : 'No changes made — Start Session'}
-      </Button>
+      {/* Bottom actions */}
+      <div className="flex flex-col gap-3">
+        <Button onClick={handleAction} className="w-full text-lg">
+          {hasChanges ? 'Review Changes' : 'No changes made — Start Session'}
+        </Button>
+        <Button onClick={() => onSchedule(s)} variant="secondary" className="w-full">
+          Schedule Start Time
+        </Button>
+      </div>
     </div>
   );
 }

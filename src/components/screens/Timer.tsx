@@ -232,6 +232,7 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
               event.body,
               event.promptText,
               settingsRef.current.dismissSeconds,
+              event.popupLabel,
             ).catch(console.error);
           } else {
             setShowOverlay(true);

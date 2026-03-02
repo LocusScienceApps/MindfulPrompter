@@ -5,8 +5,12 @@
 
 const CACHE_NAME = 'mindful-prompter-v2';
 
+// In development (localhost), skip all caching so changes load immediately.
+const IS_DEV = self.location.hostname === 'localhost';
+
 // Cache the app shell on install
 self.addEventListener('install', (event) => {
+  if (IS_DEV) { self.skipWaiting(); return; }
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
@@ -20,6 +24,7 @@ self.addEventListener('install', (event) => {
 
 // Clean up old caches on activate
 self.addEventListener('activate', (event) => {
+  if (IS_DEV) { self.clients.claim(); return; }
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -34,6 +39,9 @@ self.addEventListener('activate', (event) => {
 
 // Network-first strategy: try network, fall back to cache
 self.addEventListener('fetch', (event) => {
+  // In dev, never intercept — let the browser fetch normally so changes are always fresh
+  if (IS_DEV) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

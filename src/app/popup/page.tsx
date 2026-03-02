@@ -9,14 +9,16 @@ interface NotificationData {
   body: string;
   promptText: string;
   dismissSeconds: number;
+  /** undefined = use event-type default; "" = no label; other = custom label */
+  popupLabel?: string | null;
 }
 
 const EVENT_META: Record<string, { label: string; accent: string }> = {
-  mindfulness:      { label: 'Mindfulness',    accent: 'bg-indigo-500' },
-  work_start:       { label: 'Work Session',   accent: 'bg-emerald-500' },
-  short_break:      { label: 'Short Break',    accent: 'bg-amber-400' },
-  long_break:       { label: 'Long Break',     accent: 'bg-orange-400' },
-  session_complete: { label: 'Session Done',   accent: 'bg-gray-400' },
+  mindfulness:      { label: 'Mindfulness Prompt', accent: 'bg-indigo-500' },
+  work_start:       { label: 'Work Session',        accent: 'bg-emerald-500' },
+  short_break:      { label: 'Short Break',         accent: 'bg-amber-400' },
+  long_break:       { label: 'Long Break',          accent: 'bg-orange-400' },
+  session_complete: { label: 'Session Done',        accent: 'bg-gray-400' },
 };
 
 export default function PopupPage() {
@@ -32,12 +34,15 @@ export default function PopupPage() {
     const eventType = params.get('eventType');
     if (eventType) {
       const dismissSeconds = parseInt(params.get('dismissSeconds') ?? '5', 10);
+      // params.get returns null if absent (use default), '' if present-but-empty (no label)
+      const rawLabel = params.get('popupLabel');
       setData({
         eventType,
         title: params.get('title') ?? '',
         body: params.get('body') ?? '',
         promptText: params.get('promptText') ?? '',
         dismissSeconds,
+        popupLabel: rawLabel, // null = use default, '' = no label, text = custom
       });
       setCountdown(dismissSeconds);
     } else if (isTauri()) {
@@ -146,10 +151,14 @@ export default function PopupPage() {
     return <div style={{ minHeight: '100vh', background: '#fff' }} />;
   }
 
-  const { eventType, title, body, promptText } = data;
+  const { eventType, title, body, promptText, popupLabel } = data;
   const meta = EVENT_META[eventType] ?? EVENT_META.mindfulness;
   const hasPrompt = promptText.length > 0;
   const hasContext = title || body;
+  // popupLabel: null = use default, '' = hide label, string = custom label
+  const displayLabel = popupLabel === null || popupLabel === undefined
+    ? meta.label
+    : popupLabel; // '' means no label shown
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-white px-8 py-6 ring-1 ring-gray-200">
@@ -157,9 +166,11 @@ export default function PopupPage() {
       <div className={`absolute left-0 right-0 top-0 h-1 ${meta.accent}`} />
 
       {/* Event type label */}
-      <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
-        {meta.label}
-      </p>
+      {displayLabel && (
+        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+          {displayLabel}
+        </p>
+      )}
 
       {/* Prompt text */}
       {hasPrompt && (

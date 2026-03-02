@@ -21,7 +21,7 @@ const MODE_NAMES: Record<string, string> = {
   both: 'Both Together',
 };
 
-type SubView = null | 'preset-picker' | 'save-default-confirm';
+type SubView = null | 'preset-naming' | 'preset-slots' | 'save-default-confirm';
 
 export default function SettingsUpdated({
   settings: s,
@@ -36,18 +36,68 @@ export default function SettingsUpdated({
   const [subView, setSubView] = useState<SubView>(null);
   const [presetName, setPresetName] = useState('');
   const [savedSlot, setSavedSlot] = useState<PresetSlot | null>(null);
+  const [confirmOverwrite, setConfirmOverwrite] = useState<PresetSlot | null>(null);
 
-  const presetSlots = subView === 'preset-picker' ? getPresetSlots(mode) : [];
+  const autoName = generatePresetName(s.mode, s);
+  const presetSlots = (subView === 'preset-slots' || confirmOverwrite !== null) ? getPresetSlots(mode) : [];
 
   const handleSavePreset = (slot: PresetSlot) => {
-    const name = presetName.trim() || generatePresetName(s.mode, s);
+    const name = presetName.trim() || autoName;
     savePreset(slot, { name, mode: s.mode, settings: s });
     setSavedSlot(slot);
+    setConfirmOverwrite(null);
     setSubView(null);
   };
 
-  // ── Preset picker sub-view ──
-  if (subView === 'preset-picker') {
+  const handleSlotClick = (slot: PresetSlot, hasExisting: boolean) => {
+    if (hasExisting) {
+      setConfirmOverwrite(slot);
+    } else {
+      handleSavePreset(slot);
+    }
+  };
+
+  // ── Overwrite confirmation ──
+  if (confirmOverwrite !== null) {
+    const existing = presetSlots.find(({ slot }) => slot === confirmOverwrite);
+    return (
+      <div className="space-y-6">
+        <button
+          onClick={() => setConfirmOverwrite(null)}
+          className="text-sm text-indigo-600 hover:text-indigo-800"
+        >
+          &larr; Back
+        </button>
+
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">
+          <p className="text-sm font-semibold text-amber-900">Overwrite existing preset?</p>
+          <p className="text-sm text-amber-800">
+            Slot <strong>{confirmOverwrite}</strong> already contains{' '}
+            <strong>&ldquo;{existing?.preset?.name ?? 'a preset'}&rdquo;</strong>.
+            This will permanently replace it.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => handleSavePreset(confirmOverwrite)}
+              className="flex-1 !bg-amber-600 hover:!bg-amber-700"
+            >
+              Overwrite
+            </Button>
+            <Button
+              onClick={() => setConfirmOverwrite(null)}
+              variant="secondary"
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Preset naming step ──
+  if (subView === 'preset-naming') {
     return (
       <div className="space-y-6">
         <button
@@ -59,7 +109,7 @@ export default function SettingsUpdated({
 
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900">Save Preset</h2>
-          <p className="mt-1 text-gray-500">Choose a slot and give it a name</p>
+          <p className="mt-1 text-gray-500">Step 1 of 2: Name your preset</p>
         </div>
 
         <div>
@@ -68,21 +118,49 @@ export default function SettingsUpdated({
             type="text"
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
-            placeholder={generatePresetName(s.mode, s)}
+            placeholder={autoName}
             className="w-full rounded-lg border-2 border-gray-300 px-4 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+          <p className="mt-1 text-xs text-gray-400">
+            Leave blank to use the auto-generated name: &ldquo;{autoName}&rdquo;
+          </p>
+        </div>
+
+        <Button onClick={() => setSubView('preset-slots')} className="w-full">
+          Next: Choose a slot &rarr;
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Preset slot picker step ──
+  if (subView === 'preset-slots') {
+    const displayName = presetName.trim() || autoName;
+    return (
+      <div className="space-y-6">
+        <button
+          onClick={() => setSubView('preset-naming')}
+          className="text-sm text-indigo-600 hover:text-indigo-800"
+        >
+          &larr; Back to naming
+        </button>
+
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">Save Preset</h2>
+          <p className="mt-1 text-gray-500">Step 2 of 2: Choose a slot</p>
+          <p className="mt-1 text-sm font-medium text-indigo-600">Saving as: &ldquo;{displayName}&rdquo;</p>
         </div>
 
         <div className="space-y-2">
           {presetSlots.map(({ slot, preset }) => (
             <button
               key={slot}
-              onClick={() => handleSavePreset(slot)}
+              onClick={() => handleSlotClick(slot, !!preset)}
               className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-left hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
             >
               <span className="font-medium text-gray-700">{slot}</span>
               {preset ? (
-                <span className="ml-3 text-sm text-gray-500">
+                <span className="ml-3 text-sm text-amber-600">
                   Overwrite &ldquo;{preset.name}&rdquo;
                 </span>
               ) : (
@@ -128,7 +206,7 @@ export default function SettingsUpdated({
             <>
               <SettingRow label="Work sessions" value={`${formatNum(s.workMinutes)} minutes`} />
               <SettingRow label="Breaks" value={`${formatNum(s.breakMinutes)} minutes`} />
-              <SettingRow label="Sessions before finishing" value={String(s.sessionsPerSet)} />
+              <SettingRow label="Sessions before finishing" value={s.sessionsPerSet === 0 ? '∞ (unlimited)' : String(s.sessionsPerSet)} />
               {s.multipleSets && (
                 <>
                   <SettingRow label="Long break" value={`${formatNum(s.longBreakMinutes)} minutes`} />
@@ -198,9 +276,10 @@ export default function SettingsUpdated({
       <div className="flex flex-col gap-3">
         <Button
           onClick={() => {
-            setPresetName(generatePresetName(s.mode, s));
+            setPresetName('');
             setSavedSlot(null);
-            setSubView('preset-picker');
+            setConfirmOverwrite(null);
+            setSubView('preset-naming');
           }}
           variant="secondary"
           className="w-full"

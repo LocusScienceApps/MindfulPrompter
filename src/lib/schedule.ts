@@ -1,6 +1,20 @@
 import type { Settings, TimerEvent } from './types';
 import { formatNum } from './format';
 
+/** Resolve custom popup label for an event type from settings. */
+function resolveLabel(
+  type: TimerEvent['type'],
+  s: Settings,
+): string | undefined {
+  switch (type) {
+    case 'mindfulness':      return s.popupLabelMindfulness;
+    case 'work_start':       return s.popupLabelWorkStart;
+    case 'short_break':      return s.popupLabelShortBreak;
+    case 'long_break':       return s.popupLabelLongBreak;
+    case 'session_complete': return s.popupLabelSessionDone;
+  }
+}
+
 /**
  * Compute the full schedule of events from settings.
  * Returns a flat array of TimerEvents sorted by offsetSeconds.
@@ -50,6 +64,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       setNumber: 0,
       sessionNumber: i,
       globalSessionNumber: i,
+      popupLabel: resolveLabel('mindfulness', s),
     });
   }
 
@@ -68,6 +83,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       setNumber: 0,
       sessionNumber: count,
       globalSessionNumber: count,
+      popupLabel: resolveLabel('session_complete', s),
     });
   }
 
@@ -81,9 +97,19 @@ function computeMaxSets(s: Settings): number {
   const workSec = Math.round(s.workMinutes * 60);
   const breakSec = Math.round(s.breakMinutes * 60);
   const longBreakSec = Math.round(s.longBreakMinutes * 60);
-  const oneSetSec = s.sessionsPerSet * workSec + (s.sessionsPerSet - 1) * breakSec;
+  const sessions = s.sessionsPerSet > 0 ? s.sessionsPerSet : 4; // fallback if 0
+  const oneSetSec = sessions * workSec + (sessions - 1) * breakSec;
   const setWithBreakSec = oneSetSec + longBreakSec;
   return Math.max(1, Math.min(50, Math.floor((24 * 3600) / setWithBreakSec)));
+}
+
+/**
+ * When sessionsPerSet === 0 (unlimited), compute how many sessions fit in 24 hours, capped at 200.
+ */
+function computeMaxSessionsPerSet(s: Settings): number {
+  const workSec = Math.round(s.workMinutes * 60);
+  const breakSec = Math.round(s.breakMinutes * 60);
+  return Math.max(1, Math.min(200, Math.floor((24 * 3600) / (workSec + breakSec))));
 }
 
 /**
@@ -97,12 +123,18 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
   const reminderSec = includeMindfulness ? s.promptIntervalMinutes * 60 : 0;
   const remindersPerWork = reminderSec > 0 ? Math.round(workSec / reminderSec) : 0;
 
-  // numberOfSets === 0 means unlimited: pre-generate enough sets to fill 24 hours
-  const isUnlimited = s.multipleSets && s.numberOfSets === 0;
-  const numSets = s.multipleSets
-    ? (s.numberOfSets === 0 ? computeMaxSets(s) : Math.max(1, s.numberOfSets))
-    : 1;
-  const sessionsPerSet = s.sessionsPerSet;
+  // sessionsPerSet === 0 means unlimited sessions (forces single-set mode)
+  const isUnlimitedSessions = s.sessionsPerSet === 0;
+  const sessionsPerSet = isUnlimitedSessions ? computeMaxSessionsPerSet(s) : s.sessionsPerSet;
+
+  // numberOfSets === 0 means unlimited sets: pre-generate enough to fill 24 hours
+  // If sessions are unlimited, force single set (no concept of "end of set")
+  const isUnlimited = !isUnlimitedSessions && s.multipleSets && s.numberOfSets === 0;
+  const numSets = isUnlimitedSessions
+    ? 1
+    : s.multipleSets
+      ? (s.numberOfSets === 0 ? computeMaxSets(s) : Math.max(1, s.numberOfSets))
+      : 1;
   const totalSessions = numSets * sessionsPerSet;
   let offset = 0;
   let globalSession = 0;
@@ -121,12 +153,13 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
         body: isFirst
           ? ''
           : (session === 0 && set > 0
-              ? `Set ${set} complete! Set ${set + 1} starting.\nSession ${globalSession}${isUnlimited ? '' : ` of ${totalSessions}`}. (${formatNum(s.workMinutes)}-min work session)`
-              : `Break over! Session ${globalSession}${isUnlimited ? '' : ` of ${totalSessions}`} starting. (${formatNum(s.workMinutes)}-min work session)`),
+              ? `Set ${set} complete! Set ${set + 1} starting.\nSession ${globalSession}${(isUnlimited || isUnlimitedSessions) ? '' : ` of ${totalSessions}`}. (${formatNum(s.workMinutes)}-min work session)`
+              : `Break over! Session ${globalSession}${(isUnlimited || isUnlimitedSessions) ? '' : ` of ${totalSessions}`} starting. (${formatNum(s.workMinutes)}-min work session)`),
         promptText: prompt,
         setNumber: set + 1,
         sessionNumber: session + 1,
         globalSessionNumber: globalSession,
+        popupLabel: resolveLabel('work_start', s),
         silent: isFirst, // Don't popup on initial session start
       });
 
@@ -142,6 +175,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
             setNumber: set + 1,
             sessionNumber: session + 1,
             globalSessionNumber: globalSession,
+            popupLabel: resolveLabel('mindfulness', s),
           });
         }
       }
@@ -159,16 +193,18 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
         const mins = Math.round(totalMin % 60);
         const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
         const setsLabel = isUnlimited ? 'unlimited sets' : `${numSets} set${numSets > 1 ? 's' : ''}`;
+        const sessionsLabel = isUnlimitedSessions ? '∞ sessions' : `${totalSessions} session${totalSessions !== 1 ? 's' : ''}`;
 
         events.push({
           offsetSeconds: offset,
           type: 'session_complete',
           title: 'Great work!',
-          body: `${totalSessions} sessions${numSets > 1 ? ` across ${setsLabel}` : ''} in ${timeStr}.`,
+          body: `${sessionsLabel}${numSets > 1 ? ` across ${setsLabel}` : ''} in ${timeStr}.`,
           promptText: prompt,
           setNumber: set + 1,
           sessionNumber: session + 1,
           globalSessionNumber: globalSession,
+          popupLabel: resolveLabel('session_complete', s),
         });
       } else if (isLastSessionOfSet && !isLastSet) {
         // Long break between sets
@@ -181,6 +217,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           setNumber: set + 1,
           sessionNumber: session + 1,
           globalSessionNumber: globalSession,
+          popupLabel: resolveLabel('long_break', s),
         });
         offset += longBreakSec;
       } else {
@@ -194,6 +231,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           setNumber: set + 1,
           sessionNumber: session + 1,
           globalSessionNumber: globalSession,
+          popupLabel: resolveLabel('short_break', s),
         });
         offset += breakSec;
       }

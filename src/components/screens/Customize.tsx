@@ -16,7 +16,6 @@ interface CustomizeProps {
   settings: Settings;
   onDone: (settings: Settings) => void;           // "Review Changes" → settings-updated
   onStartDirectly: (settings: Settings) => void;  // "No changes — Start Session"
-  onSchedule: (settings: Settings) => void;       // "Schedule Start Time"
   onResetToOriginal: () => void;                  // After reset confirmation → defaults-review
   onBack: () => void;
 }
@@ -25,7 +24,6 @@ export default function Customize({
   settings: initial,
   onDone,
   onStartDirectly,
-  onSchedule,
   onResetToOriginal,
   onBack,
 }: CustomizeProps) {
@@ -179,27 +177,35 @@ export default function Customize({
 
           <SettingField
             label='Work sessions ("pomodoros") per set'
-            helper={`Default: ${initial.sessionsPerSet}`}
+            helper={`Default: ${initial.sessionsPerSet}. Enter 0 to run indefinitely (∞).`}
           >
             <NumericInput
               value={s.sessionsPerSet}
               defaultValue={initial.sessionsPerSet}
               unit="sessions"
               integerOnly
-              onChange={(v) => update({ sessionsPerSet: v })}
+              allowZero
+              onChange={(v) => update({ sessionsPerSet: v, ...(v === 0 ? { multipleSets: false } : {}) })}
             />
+            {s.sessionsPerSet === 0 && (
+              <p className="mt-1 text-xs text-gray-500">
+                ∞ — runs indefinitely until you stop. Multiple sets disabled.
+              </p>
+            )}
           </SettingField>
 
-          <SettingField label="Multiple sets with a longer break between?">
-            <YesNoToggle
-              value={s.multipleSets}
-              yesLabel="Yes, multiple sets"
-              noLabel="No, just one set"
-              onChange={(v) => update({ multipleSets: v, numberOfSets: v ? 3 : 1 })}
-            />
-          </SettingField>
+          {s.sessionsPerSet !== 0 && (
+            <SettingField label="Multiple sets with a longer break between?">
+              <YesNoToggle
+                value={s.multipleSets}
+                yesLabel="Yes, multiple sets"
+                noLabel="No, just one set"
+                onChange={(v) => update({ multipleSets: v, numberOfSets: v ? 3 : 1 })}
+              />
+            </SettingField>
+          )}
 
-          {s.multipleSets && (
+          {s.multipleSets && s.sessionsPerSet !== 0 && (
             <>
               <SettingField
                 label="Long break between sets"
@@ -291,7 +297,7 @@ export default function Customize({
           {mode === 'mindfulness' && (
             <SettingField
               label="Number of prompts"
-              helper={`Default: ${initial.promptCount === 0 ? '0 (runs indefinitely)' : initial.promptCount}. Enter a number to stop after that many prompts.`}
+              helper={`Default: ${initial.promptCount === 0 ? '∞ (0 = runs indefinitely)' : initial.promptCount}. Enter 0 to run indefinitely (∞), or enter a number to stop after that many prompts.`}
             >
               <NumericInput
                 value={s.promptCount}
@@ -314,6 +320,52 @@ export default function Customize({
         </Section>
       )}
 
+      {/* ── Popup Labels ── */}
+      <Section title="Popup Labels">
+        <p className="text-xs text-gray-400 leading-snug">
+          Labels shown at the top of each popup. Leave blank to use the default.
+          Type a single dash ( - ) to show no label.
+        </p>
+        {(mode === 'mindfulness' || mode === 'both') && (
+          <LabelInput
+            label="Mindfulness prompt popup"
+            defaultLabel="Mindfulness Prompt"
+            value={s.popupLabelMindfulness}
+            onChange={(v) => update({ popupLabelMindfulness: v })}
+          />
+        )}
+        {(mode === 'pomodoro' || mode === 'both') && (
+          <>
+            <LabelInput
+              label="Work session start"
+              defaultLabel="Work Session"
+              value={s.popupLabelWorkStart}
+              onChange={(v) => update({ popupLabelWorkStart: v })}
+            />
+            <LabelInput
+              label="Short break"
+              defaultLabel="Short Break"
+              value={s.popupLabelShortBreak}
+              onChange={(v) => update({ popupLabelShortBreak: v })}
+            />
+            {s.multipleSets && (
+              <LabelInput
+                label="Long break (between sets)"
+                defaultLabel="Long Break"
+                value={s.popupLabelLongBreak}
+                onChange={(v) => update({ popupLabelLongBreak: v })}
+              />
+            )}
+            <LabelInput
+              label="Session finished"
+              defaultLabel="Session Done"
+              value={s.popupLabelSessionDone}
+              onChange={(v) => update({ popupLabelSessionDone: v })}
+            />
+          </>
+        )}
+      </Section>
+
       {/* ── Sound ── */}
       <Section title="Sound">
         <SettingField label="Play a sound when prompts and alerts appear?">
@@ -328,9 +380,6 @@ export default function Customize({
       <div className="flex flex-col gap-3">
         <Button onClick={handleAction} className="w-full text-lg">
           {hasChanges ? 'Review Changes' : 'No changes made — Start Session'}
-        </Button>
-        <Button onClick={() => onSchedule(s)} variant="secondary" className="w-full">
-          Schedule Start Time
         </Button>
       </div>
     </div>
@@ -407,6 +456,54 @@ function YesNoToggle({
   );
 }
 
+function LabelInput({
+  label,
+  defaultLabel,
+  value,
+  onChange,
+}: {
+  label: string;
+  defaultLabel: string;
+  /** undefined = use built-in default; '' = no label; other = custom */
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+}) {
+  // We track the raw text the user types. '-' means "no label" (stored as '').
+  // Empty input means "use default" (stored as undefined).
+  const [raw, setRaw] = useState<string>(() => {
+    if (value === undefined) return '';
+    if (value === '') return '-';
+    return value;
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setRaw(text);
+    if (text === '') {
+      onChange(undefined); // revert to default
+    } else if (text === '-') {
+      onChange(''); // no label
+    } else {
+      onChange(text);
+    }
+  };
+
+  return (
+    <SettingField label={label} helper={`Default: "${defaultLabel}". Type - (dash) for no label.`}>
+      <input
+        type="text"
+        value={raw}
+        onChange={handleChange}
+        placeholder={defaultLabel}
+        className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+      {value === '' && (
+        <p className="mt-1 text-xs text-gray-500">No label will be shown.</p>
+      )}
+    </SettingField>
+  );
+}
+
 function NumericInput({
   value,
   defaultValue,
@@ -442,7 +539,7 @@ function NumericInput({
       <input
         type="number"
         value={rawInput}
-        placeholder={defaultValue === 0 ? '0' : formatNum(defaultValue)}
+        placeholder={allowZero && defaultValue === 0 ? '∞' : formatNum(defaultValue)}
         onChange={handleChange}
         min={allowZero ? 0 : integerOnly ? 1 : 0.5}
         step={integerOnly ? 1 : 0.5}

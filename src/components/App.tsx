@@ -137,7 +137,6 @@ export default function App() {
             settings={settings}
             onDone={handleCustomizeDone}
             onStartDirectly={handleStartDirectly}
-            onSchedule={handleScheduleWithSettings}
             onResetToOriginal={handleResetToOriginal}
             onBack={() => handleBack('defaults-review')}
           />

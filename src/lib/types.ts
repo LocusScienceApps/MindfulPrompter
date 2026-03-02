@@ -26,6 +26,13 @@ export interface Settings {
 
   // Global
   playSound: boolean;
+
+  // Custom popup labels (undefined = use built-in default; "" = show no label)
+  popupLabelMindfulness?: string;
+  popupLabelWorkStart?: string;
+  popupLabelShortBreak?: string;
+  popupLabelLongBreak?: string;
+  popupLabelSessionDone?: string;
 }
 
 /** A scheduled event in the timer */
@@ -39,6 +46,8 @@ export interface TimerEvent {
   setNumber: number;
   sessionNumber: number;
   globalSessionNumber: number;
+  /** Custom popup label to display. undefined = use event-type default; "" = no label. */
+  popupLabel?: string;
   /** If true, don't show a popup/notification for this event (e.g., initial session start) */
   silent?: boolean;
 }

@@ -1,7 +1,24 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(ipconfig)",
+      "Bash(netsh advfirewall firewall show rule name=\"Next.js Dev\")",
+      "Bash(npx next dev -H 0.0.0.0)",
+      "Bash(taskkill /PID 58916 /F)",
+      "Bash(cmd /c \"taskkill /PID 58916 /F\")",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(npm install --save-dev @tauri-apps/cli)",
+      "Bash(export PATH=\"$PATH:/c/Users/wmben/.cargo/bin\")",
+      "Bash(npx tauri init --app-name MindfulPrompter --window-title \"MindfulPrompter\" --dist-dir ../out --dev-url http://localhost:3000 --before-dev-command \"npm run dev\" --before-build-command \"npm run build\")",
+      "Bash(npx tauri init --app-name MindfulPrompter --window-title \"MindfulPrompter\" --frontend-dist ../out --dev-url http://localhost:3000 --before-dev-command \"npm run dev\" --before-build-command \"npm run build\")",
+      "Bash(npm run tauri dev)",
+      "WebFetch(domain:github.com)",
+      "Bash(taskkill /F /IM \"app.exe\")",
+      "Bash(taskkill /F /IM \"MindfulPrompter.exe\")",
+      "Bash(taskkill /F /IM \"node.exe\")",
+      "Bash(taskkill /F /PID 2212)"
     ]
   }
 }

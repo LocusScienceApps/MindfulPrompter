@@ -531,6 +531,7 @@ function NumericInput({
     const parsed = integerOnly ? parseInt(raw, 10) : parseFloat(raw);
     if (!isNaN(parsed) && (allowZero ? parsed >= 0 : parsed > 0)) {
       onChange(parsed);
+      if (parsed === 0 && allowZero) setRawInput('');
     }
   };
 
@@ -539,7 +540,7 @@ function NumericInput({
       <input
         type="number"
         value={rawInput}
-        placeholder={allowZero && defaultValue === 0 ? '∞' : formatNum(defaultValue)}
+        placeholder={allowZero && (defaultValue === 0 || value === 0) ? '∞' : formatNum(defaultValue)}
         onChange={handleChange}
         min={allowZero ? 0 : integerOnly ? 1 : 0.5}
         step={integerOnly ? 1 : 0.5}

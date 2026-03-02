@@ -238,6 +238,31 @@ export default function SettingsUpdated({
           )}
 
           <SettingRow label="Sound" value={s.playSound ? 'On' : 'Off'} />
+
+          {/* Popup labels — only shown when at least one is customized */}
+          {(() => {
+            const labels: { label: string; value: string }[] = [];
+            if (mode === 'mindfulness' || mode === 'both') {
+              if (s.popupLabelMindfulness) labels.push({ label: 'Mindfulness prompt popup', value: s.popupLabelMindfulness });
+            }
+            if (mode === 'pomodoro' || mode === 'both') {
+              if (s.popupLabelWorkStart) labels.push({ label: 'Work session start popup', value: s.popupLabelWorkStart });
+              if (s.popupLabelShortBreak) labels.push({ label: 'Short break popup', value: s.popupLabelShortBreak });
+              if (s.multipleSets && s.popupLabelLongBreak) labels.push({ label: 'Long break popup', value: s.popupLabelLongBreak });
+              if (s.popupLabelSessionDone) labels.push({ label: 'Session finished popup', value: s.popupLabelSessionDone });
+            }
+            if (labels.length === 0) return null;
+            return (
+              <>
+                <div className="pt-1 pb-0.5">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Popup labels</span>
+                </div>
+                {labels.map(({ label, value }) => (
+                  <SettingRow key={label} label={label} value={`"${value}"`} />
+                ))}
+              </>
+            );
+          })()}
         </dl>
       </div>
 

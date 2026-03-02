@@ -142,6 +142,31 @@ export default function DefaultsReview({
           )}
 
           <SettingRow label="Sound" value={settings.playSound ? 'On' : 'Off'} />
+
+          {/* Popup labels — only shown when at least one is customized */}
+          {(() => {
+            const labels: { label: string; value: string }[] = [];
+            if (mode === 'mindfulness' || mode === 'both') {
+              if (settings.popupLabelMindfulness) labels.push({ label: 'Mindfulness prompt popup', value: settings.popupLabelMindfulness });
+            }
+            if (mode === 'pomodoro' || mode === 'both') {
+              if (settings.popupLabelWorkStart) labels.push({ label: 'Work session start popup', value: settings.popupLabelWorkStart });
+              if (settings.popupLabelShortBreak) labels.push({ label: 'Short break popup', value: settings.popupLabelShortBreak });
+              if (settings.multipleSets && settings.popupLabelLongBreak) labels.push({ label: 'Long break popup', value: settings.popupLabelLongBreak });
+              if (settings.popupLabelSessionDone) labels.push({ label: 'Session finished popup', value: settings.popupLabelSessionDone });
+            }
+            if (labels.length === 0) return null;
+            return (
+              <>
+                <div className="pt-1 pb-0.5">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Popup labels</span>
+                </div>
+                {labels.map(({ label, value }) => (
+                  <SettingRow key={label} label={label} value={`"${value}"`} />
+                ))}
+              </>
+            );
+          })()}
         </dl>
       </div>
 

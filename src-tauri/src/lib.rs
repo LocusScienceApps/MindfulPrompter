@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,9 +32,15 @@ async fn show_notification(
         dismiss_seconds,
     });
 
-    // Close any existing notification window first
+    // Close any existing notification window first.
+    // Emit "notification-replacing" first so the popup's onCloseRequested guard steps aside.
     if let Some(existing) = app.get_webview_window("notification") {
+        let _ = existing.emit("notification-replacing", ());
+        // Small yield to let the JS event handler run before we send the close
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         let _ = existing.close();
+        // Wait for the window to actually be destroyed before creating a new one with the same label
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
 
     // WebviewUrl::App only works for static builds; dev mode needs External with the full URL.
@@ -55,10 +61,12 @@ async fn show_notification(
 
     WebviewWindowBuilder::new(&app, "notification", popup_url)
         .title("MindfulPrompter")
-        .inner_size(480.0, 340.0)
+        .inner_size(480.0, 320.0)
         .always_on_top(true)
         .center()
         .resizable(false)
+        .decorations(false)  // No title bar — removes X button, minimize, and drag-to-move
+        .minimizable(false)
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())

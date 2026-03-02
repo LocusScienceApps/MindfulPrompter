@@ -7,6 +7,8 @@
     "notification"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-destroy",
+    "core:window:allow-close"
   ]
 }

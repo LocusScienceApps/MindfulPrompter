@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { isTauri } from '@/lib/tauri';
 
 interface NotificationData {
@@ -22,6 +22,10 @@ const EVENT_META: Record<string, { label: string; accent: string }> = {
 export default function PopupPage() {
   const [data, setData] = useState<NotificationData | null>(null);
   const [countdown, setCountdown] = useState(0);
+  // Refs so effects registered once can always read current values
+  const countdownRef = useRef(0);
+  // Set true when Rust emits "notification-replacing" so onCloseRequested lets the close through
+  const replacingRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -48,18 +52,27 @@ export default function PopupPage() {
     }
   }, []);
 
+  // Listen for session-stopped (close popup when session ends) and
+  // notification-replacing (Rust is about to close this window for a new one — allow it).
   useEffect(() => {
     if (!isTauri()) return;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: (() => void)[] = [];
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen('session-stopped', async () => {
+        replacingRef.current = true;
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         getCurrentWindow().close();
-      }).then((fn) => { unlisten = fn; })
-        .catch(console.error);
+      }).then((fn) => unlisteners.push(fn)).catch(console.error);
+
+      listen('notification-replacing', () => {
+        replacingRef.current = true;
+      }).then((fn) => unlisteners.push(fn)).catch(console.error);
     }).catch(console.error);
-    return () => { unlisten?.(); };
+    return () => { unlisteners.forEach((fn) => fn()); };
   }, []);
+
+  // Keep ref in sync so focus-steal / close-block effects always have current value
+  useEffect(() => { countdownRef.current = countdown; }, [countdown]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -71,6 +84,37 @@ export default function PopupPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, [countdown]);
+
+  // While countdown > 0: steal focus back whenever user clicks away, and block Alt+F4.
+  // Registered once on mount; reads refs so it doesn't need to re-register each second.
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    const handleBlur = async () => {
+      if (countdownRef.current <= 0 || replacingRef.current) return;
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().setFocus();
+      } catch { /* non-fatal */ }
+    };
+    window.addEventListener('blur', handleBlur);
+
+    // Block user-initiated close (Alt+F4, taskbar) during countdown,
+    // but allow it when Rust is replacing or session has stopped.
+    let unlisten: (() => void) | undefined;
+    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+      getCurrentWindow().onCloseRequested((event) => {
+        if (countdownRef.current > 0 && !replacingRef.current) {
+          event.preventDefault();
+        }
+      }).then((fn) => { unlisten = fn; }).catch(console.error);
+    }).catch(console.error);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      unlisten?.();
+    };
+  }, []);
 
   const handleDismiss = useCallback(async () => {
     if (countdown > 0) return;
@@ -108,7 +152,7 @@ export default function PopupPage() {
   const hasContext = title || body;
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-white px-8 py-6">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-white px-8 py-6 ring-1 ring-gray-200">
       {/* Thin colored accent strip at top */}
       <div className={`absolute left-0 right-0 top-0 h-1 ${meta.accent}`} />
 

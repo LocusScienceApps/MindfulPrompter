@@ -28,14 +28,19 @@ export default function SessionComplete({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          onNewSession();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [onNewSession]);
+  }, []);
+
+  // Navigate away once countdown hits 0 (kept separate so the state updater above
+  // doesn't call a parent setter mid-render, which React 18 forbids)
+  useEffect(() => {
+    if (countdown === 0) onNewSession();
+  }, [countdown, onNewSession]);
 
   const { mode } = settings;
   const showPomoStats = (mode === 'pomodoro' || mode === 'both') && stats && stats.sessionsCompleted > 0;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { isTauri } from '@/lib/tauri';
 
 interface NotificationData {
   eventType: string;
@@ -10,13 +11,18 @@ interface NotificationData {
   dismissSeconds: number;
 }
 
+const EVENT_META: Record<string, { label: string; accent: string }> = {
+  mindfulness:      { label: 'Mindfulness',    accent: 'bg-indigo-500' },
+  work_start:       { label: 'Work Session',   accent: 'bg-emerald-500' },
+  short_break:      { label: 'Short Break',    accent: 'bg-amber-400' },
+  long_break:       { label: 'Long Break',     accent: 'bg-orange-400' },
+  session_complete: { label: 'Session Done',   accent: 'bg-gray-400' },
+};
+
 export default function PopupPage() {
   const [data, setData] = useState<NotificationData | null>(null);
   const [countdown, setCountdown] = useState(0);
 
-  // Fetch notification data on mount.
-  // Dev mode: data is in URL query params (no IPC needed to display content).
-  // Prod mode: data comes from Tauri state via invoke.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const eventType = params.get('eventType');
@@ -30,7 +36,7 @@ export default function PopupPage() {
         dismissSeconds,
       });
       setCountdown(dismissSeconds);
-    } else {
+    } else if (isTauri()) {
       import('@tauri-apps/api/core').then(({ invoke }) => {
         invoke<NotificationData>('get_notification_data').then((result) => {
           if (result) {
@@ -38,23 +44,23 @@ export default function PopupPage() {
             setCountdown(result.dismissSeconds);
           }
         }).catch(console.error);
-      });
+      }).catch(console.error);
     }
   }, []);
 
-  // Listen for session-stopped so popup closes automatically when session ends
   useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen('session-stopped', async () => {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         getCurrentWindow().close();
-      }).then((fn) => { unlisten = fn; });
-    });
+      }).then((fn) => { unlisten = fn; })
+        .catch(console.error);
+    }).catch(console.error);
     return () => { unlisten?.(); };
   }, []);
 
-  // Countdown timer
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setInterval(() => {
@@ -68,14 +74,19 @@ export default function PopupPage() {
 
   const handleDismiss = useCallback(async () => {
     if (countdown > 0) return;
+    if (!isTauri()) { window.close(); return; }
     try {
-      const { emit } = await import('@tauri-apps/api/event');
-      await emit('notification-dismissed', { eventType: data?.eventType ?? 'mindfulness' });
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().close();
-    } catch (e) {
-      console.error('Failed to dismiss notification:', e);
-      window.close();
+      const { invoke } = await import('@tauri-apps/api/core');
+      try {
+        const { emit } = await import('@tauri-apps/api/event');
+        await emit('notification-dismissed', { eventType: data?.eventType ?? 'mindfulness' });
+      } catch { /* non-fatal */ }
+      await invoke('close_notification_window');
+    } catch {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().close();
+      } catch { /* nothing more to try */ }
     }
   }, [countdown, data?.eventType]);
 
@@ -87,59 +98,60 @@ export default function PopupPage() {
     return () => document.removeEventListener('keydown', handler);
   }, [countdown, handleDismiss]);
 
-  // Show a loading state while fetching data
   if (!data) {
-    return <div className="flex min-h-screen items-center justify-center bg-indigo-500" />;
+    return <div style={{ minHeight: '100vh', background: '#fff' }} />;
   }
 
-  const { eventType, title, body, promptText, dismissSeconds: _ } = data;
-
-  const colorClass =
-    ({
-      mindfulness: 'from-indigo-500 to-indigo-600',
-      work_start: 'from-emerald-500 to-emerald-600',
-      short_break: 'from-amber-500 to-amber-600',
-      long_break: 'from-orange-500 to-orange-600',
-      session_complete: 'from-purple-500 to-purple-600',
-    } as Record<string, string>)[eventType] ?? 'from-indigo-500 to-indigo-600';
-
+  const { eventType, title, body, promptText } = data;
+  const meta = EVENT_META[eventType] ?? EVENT_META.mindfulness;
   const hasPrompt = promptText.length > 0;
   const hasContext = title || body;
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className={`w-full max-w-sm rounded-3xl bg-gradient-to-br ${colorClass} p-6 text-white shadow-2xl`}>
-        {hasPrompt && (
-          <p className="text-center text-2xl font-bold leading-snug">{promptText}</p>
-        )}
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-white px-8 py-6">
+      {/* Thin colored accent strip at top */}
+      <div className={`absolute left-0 right-0 top-0 h-1 ${meta.accent}`} />
 
-        {hasContext && (
-          <div className={hasPrompt ? 'mt-5 border-t border-white/20 pt-4' : ''}>
-            {title && (
-              <p className={`text-center font-semibold ${hasPrompt ? 'text-base opacity-90' : 'text-xl'}`}>
-                {title}
-              </p>
-            )}
-            {body && (
-              <p className={`whitespace-pre-line text-center leading-relaxed ${hasPrompt ? 'mt-1 text-sm opacity-80' : 'mt-2 text-base opacity-95'}`}>
-                {body}
-              </p>
-            )}
-          </div>
-        )}
+      {/* Event type label */}
+      <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+        {meta.label}
+      </p>
 
-        <button
-          onClick={handleDismiss}
-          disabled={countdown > 0}
-          className={`mt-6 w-full rounded-xl py-3 text-lg font-semibold transition-all ${
-            countdown > 0
-              ? 'cursor-not-allowed bg-white/20 text-white/70'
-              : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
-          }`}
-        >
-          {countdown > 0 ? `Wait (${countdown}s)...` : 'OK'}
-        </button>
-      </div>
+      {/* Prompt text */}
+      {hasPrompt && (
+        <p className="text-center text-xl font-semibold leading-snug text-gray-900">
+          {promptText}
+        </p>
+      )}
+
+      {/* Context (title / body) */}
+      {hasContext && (
+        <div className={hasPrompt ? 'mt-4 border-t border-gray-100 pt-4 w-full' : 'w-full'}>
+          {title && (
+            <p className={`text-center text-gray-600 ${hasPrompt ? 'text-sm' : 'text-base font-medium'}`}>
+              {title}
+            </p>
+          )}
+          {body && (
+            <p className="mt-1 whitespace-pre-line text-center text-sm text-gray-500">
+              {body}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Dismiss button */}
+      <button
+        onClick={handleDismiss}
+        disabled={countdown > 0}
+        className={`mt-6 w-full rounded-xl py-3 text-base font-semibold transition-all ${
+          countdown > 0
+            ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+            : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
+        }`}
+      >
+        {countdown > 0 ? `Wait (${countdown}s)…` : 'OK'}
+      </button>
     </div>
   );
 }

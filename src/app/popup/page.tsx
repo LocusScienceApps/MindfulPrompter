@@ -15,7 +15,7 @@ interface NotificationData {
 
 const EVENT_META: Record<string, { label: string; accent: string }> = {
   mindfulness:      { label: 'Mindfulness Prompt', accent: 'bg-indigo-500' },
-  work_start:       { label: 'Work Session',        accent: 'bg-emerald-500' },
+  work_start:       { label: 'Work Period',          accent: 'bg-emerald-500' },
   short_break:      { label: 'Short Break',         accent: 'bg-amber-400' },
   long_break:       { label: 'Long Break',          accent: 'bg-orange-400' },
   session_complete: { label: 'Session Done',        accent: 'bg-gray-400' },

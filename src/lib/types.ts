@@ -46,6 +46,10 @@ export interface TimerEvent {
   setNumber: number;
   sessionNumber: number;
   globalSessionNumber: number;
+  /** Total sets in this session. 0 = unlimited or not applicable. */
+  totalSets: number;
+  /** Periods per set. 0 = unlimited or not applicable. */
+  periodsPerSet: number;
   /** Custom popup label to display. undefined = use event-type default; "" = no label. */
   popupLabel?: string;
   /** If true, don't show a popup/notification for this event (e.g., initial session start) */

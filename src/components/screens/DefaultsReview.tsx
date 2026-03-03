@@ -108,9 +108,9 @@ export default function DefaultsReview({
         <dl className="space-y-3">
           {(mode === 'pomodoro' || mode === 'both') && (
             <>
-              <SettingRow label="Work sessions" value={`${formatNum(settings.workMinutes)} minutes`} />
+              <SettingRow label="Work periods" value={`${formatNum(settings.workMinutes)} minutes`} />
               <SettingRow label="Breaks" value={`${formatNum(settings.breakMinutes)} minutes`} />
-              <SettingRow label="Sessions before finishing" value={String(settings.sessionsPerSet)} />
+              <SettingRow label="Periods per set" value={String(settings.sessionsPerSet)} />
               {settings.multipleSets && (
                 <>
                   <SettingRow label="Long break" value={`${formatNum(settings.longBreakMinutes)} minutes`} />
@@ -150,7 +150,7 @@ export default function DefaultsReview({
               if (settings.popupLabelMindfulness) labels.push({ label: 'Mindfulness prompt popup', value: settings.popupLabelMindfulness });
             }
             if (mode === 'pomodoro' || mode === 'both') {
-              if (settings.popupLabelWorkStart) labels.push({ label: 'Work session start popup', value: settings.popupLabelWorkStart });
+              if (settings.popupLabelWorkStart) labels.push({ label: 'Work period start popup', value: settings.popupLabelWorkStart });
               if (settings.popupLabelShortBreak) labels.push({ label: 'Short break popup', value: settings.popupLabelShortBreak });
               if (settings.multipleSets && settings.popupLabelLongBreak) labels.push({ label: 'Long break popup', value: settings.popupLabelLongBreak });
               if (settings.popupLabelSessionDone) labels.push({ label: 'Session finished popup', value: settings.popupLabelSessionDone });

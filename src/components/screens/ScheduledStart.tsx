@@ -158,7 +158,7 @@ export default function ScheduledStart({ settings, onStart, onBack }: ScheduledS
         <dl className="space-y-2">
           {(mode === 'pomodoro' || mode === 'both') && (
             <>
-              <SummaryRow label="Work session" value={`${formatNum(settings.workMinutes)} min`} />
+              <SummaryRow label="Work period" value={`${formatNum(settings.workMinutes)} min`} />
               <SummaryRow label="Break" value={`${formatNum(settings.breakMinutes)} min`} />
               <SummaryRow
                 label="Sets"

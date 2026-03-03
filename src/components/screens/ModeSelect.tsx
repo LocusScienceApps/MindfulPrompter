@@ -66,13 +66,13 @@ const modes: { key: AppMode; title: string; description: string; icon: React.Rea
   {
     key: 'pomodoro',
     title: 'Pomodoro Timer',
-    description: 'Customizable work and break sessions.',
+    description: 'Customizable work periods and breaks.',
     icon: <TomatoIcon />,
   },
   {
     key: 'both',
     title: 'Both Together',
-    description: 'Mindfulness prompts within your work sessions.',
+    description: 'Mindfulness prompts within your work periods.',
     icon: <BothIcon />,
   },
 ];

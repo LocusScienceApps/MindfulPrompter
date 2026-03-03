@@ -354,3 +354,73 @@ public/
    - 60s auto-dismiss
 2. Fix any bugs found
 3. When tests pass → Phase 2 (Tauri wrapper)
+
+---
+
+### ⚠️ DOCUMENTATION GAP — Sessions 10–13 (2026-03-02, other PC)
+
+**Commits exist but were never documented in SHARED.md:**
+- Session 10: Fix Tauri popup — async command + isTauri guards + redesigned UI
+- Session 11: Blocking popup + popup replacement fix
+- Session 11: (separate commit) Session notes saved as permissions only — no actual notes
+- Session 12: Popup labels, ∞ fields, two-step preset save, overlay redesign
+- Session 13: Popup labels on summary screens + ∞ for numberOfSets=0
+
+**What is known from reading the code:**
+- The Tauri native popup window is working (blank popup bug was fixed)
+- Popup labels are customizable per event type (Work Period, Short Break, etc.)
+- ∞ display works for unlimited periods and sets
+- Two-step preset save was implemented
+- NotificationOverlay was redesigned
+- `dev-browser.bat` and `dev-tauri.bat` were created on that PC
+
+**The other PC likely has session notes** (possibly in the AI's memory files or SHARED.md on that machine)
+that were never pushed. When returning to that PC, check for unpushed notes and integrate them here.
+
+**None of Sessions 10–13 code changes have been tested on this (new) PC.**
+
+---
+
+### Session 14 — 2026-03-03 (new PC setup + terminology + timer improvements)
+
+**Context:** Working on a new PC (username: benw00). Previous PC username was wmben.
+All Session 10–13 code was present but undocumented (see gap above).
+
+**What was done:**
+
+- **New PC fix:** `dev-tauri.bat` had hardcoded `C:\Users\wmben\.cargo\bin` — changed to `%USERPROFILE%\.cargo\bin` so it works on any PC
+- **Batch file improvements:** Both `dev-browser.bat` and `dev-tauri.bat` now kill any process on port 3000 before starting, preventing the "port in use" error when switching between browser and Tauri modes. Both use `cmd /k` so the window stays open on errors.
+- **Default sets fix:** When user toggles "Yes, multiple sets", the Number of Sets field now defaults to 3 (not 1). Previously showed "1" as placeholder even though 3 is the meaningful default.
+- **Terminology overhaul — "session" → "period"** for the 25-minute work unit, across all user-facing text in 8 files:
+  - `Customize.tsx`, `DefaultsReview.tsx`, `Summary.tsx`, `ModeSelect.tsx`, `ScheduledStart.tsx`, `SessionComplete.tsx`, `Timer.tsx`, `NotificationOverlay.tsx`, `popup/page.tsx`
+  - Final hierarchy: **work period** (25 min) → **set** (N periods) → **session** (all sets, start to finish)
+  - "Start Session", "Stop Session", "Session complete", "Session Done" deliberately kept — those refer to the whole thing
+- **Period numbering fix:** Timer screen was showing global period count (e.g., "Period 7 of 12 total"). Now shows period within set (e.g., "Set 2, Period 3").
+- **New timer screen detail line:** Below the countdown ring, shows *"out of 4 5-period sets"* with "5-period" in italics. Only appears for multiple defined sets. Single-set shows "Period 3 of 4" inside the ring. Unlimited shows just "Period 3".
+- **Popup text rewrite** (schedule.ts):
+  - Short break: title "Break!" + body "Set 2, Period 3 complete. Take a 5-minute break."
+  - Long break: title "Break!" + body "Set 3 complete. Take a 15-minute break."
+  - Back to work: title "Break over!" + body "Break over! Set 3, Period 2 starting (of 4 sets)"
+  - Session complete: body "3 sets × 4 periods × 25 min = 5h"
+  - Single-set and unlimited variants handled (omit set info / omit "of X" respectively)
+- **Two new fields on TimerEvent** (`types.ts`): `totalSets` and `periodsPerSet` (0 = unlimited/not applicable)
+
+**Current state:**
+- All changes committed and pushed from this PC
+- **NONE of this session's changes have been tested** — run `dev-browser.bat` and test all three modes
+- Sessions 10–13 changes also untested on this PC
+
+**Next steps for AI (start here next session):**
+1. **If on the other PC first:** Check for any unpushed notes or memory files. Pull this session's changes. Integrate any notes from Sessions 10–13 into this SHARED.md.
+2. **Testing priority** — run `dev-browser.bat`, then test:
+   - Pomodoro mode: single set, multiple sets (check period numbering and detail line on timer screen)
+   - Pomodoro mode: unlimited periods, unlimited sets (check that "of X" is omitted correctly)
+   - Break popups: verify new title/body format
+   - Back-to-work popups: verify "Break over! Set X, Period Y starting (of Z sets)"
+   - Session complete: verify "N sets × M periods × W min = T" format
+   - Mindfulness mode: verify no set/period info shown (not applicable)
+   - Both Together mode: verify period numbering works alongside prompts
+   - Preset save/load in all three modes
+3. **Run `dev-tauri.bat`** and test the native popup window with the new text formats
+4. Fix any bugs found
+5. **After testing passes:** Update SHARED.md Phase 2 section status and proceed with any remaining Phase 2 work

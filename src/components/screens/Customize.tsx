@@ -56,7 +56,7 @@ export default function Customize({
     if (mode === 'both' && !dividesEvenly(s.workMinutes, s.promptIntervalMinutes)) {
       const suggestions = formatDivisorList(s.workMinutes);
       setIntervalError(
-        `That doesn't fit evenly into your ${formatNum(s.workMinutes)}-minute work session. Try: ${suggestions}`
+        `That doesn't fit evenly into your ${formatNum(s.workMinutes)}-minute work period. Try: ${suggestions}`
       );
       return;
     }
@@ -142,7 +142,7 @@ export default function Customize({
       {(mode === 'pomodoro' || mode === 'both') && (
         <Section title="Pomodoro Settings">
           <SettingField
-            label="Work session length"
+            label="Work period length"
             helper={`Default: ${formatNum(initial.workMinutes)} minutes`}
           >
             <NumericInput
@@ -176,13 +176,13 @@ export default function Customize({
           </SettingField>
 
           <SettingField
-            label='Work sessions ("pomodoros") per set'
+            label='Work periods per set'
             helper={`Default: ${initial.sessionsPerSet}. Enter 0 to run indefinitely (∞).`}
           >
             <NumericInput
               value={s.sessionsPerSet}
               defaultValue={initial.sessionsPerSet}
-              unit="sessions"
+              unit="periods"
               integerOnly
               allowZero
               onChange={(v) => update({ sessionsPerSet: v, ...(v === 0 ? { multipleSets: false } : {}) })}
@@ -221,11 +221,11 @@ export default function Customize({
 
               <SettingField
                 label="Number of sets"
-                helper={`Default: ${initial.numberOfSets}. Enter 0 to run until you stop.`}
+                helper={`Default: 3. Enter 0 to run until you stop.`}
               >
                 <NumericInput
                   value={s.numberOfSets}
-                  defaultValue={initial.numberOfSets}
+                  defaultValue={3}
                   unit="sets"
                   integerOnly
                   allowZero
@@ -265,7 +265,7 @@ export default function Customize({
             label="Prompt frequency"
             helper={
               mode === 'both'
-                ? `Must fit evenly into your ${formatNum(s.workMinutes)}-minute work session. Default: ${formatNum(derivedInterval)} minutes.`
+                ? `Must fit evenly into your ${formatNum(s.workMinutes)}-minute work period. Default: ${formatNum(derivedInterval)} minutes.`
                 : `Must divide evenly into 60 minutes. Default: ${formatNum(initial.promptIntervalMinutes)} minutes.`
             }
           >
@@ -337,8 +337,8 @@ export default function Customize({
         {(mode === 'pomodoro' || mode === 'both') && (
           <>
             <LabelInput
-              label="Work session start"
-              defaultLabel="Work Session"
+              label="Work period start"
+              defaultLabel="Work Period"
               value={s.popupLabelWorkStart}
               onChange={(v) => update({ popupLabelWorkStart: v })}
             />

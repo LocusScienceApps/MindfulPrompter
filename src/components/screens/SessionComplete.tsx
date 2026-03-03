@@ -72,7 +72,7 @@ export default function SessionComplete({
             {showPomoStats && (
               <>
                 <StatRow
-                  label="Sessions completed"
+                  label="Periods completed"
                   value={
                     stats.setsCompleted > 1
                       ? `${stats.sessionsCompleted} (${stats.setsCompleted} sets)`

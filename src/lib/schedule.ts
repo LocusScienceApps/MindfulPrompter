@@ -51,6 +51,8 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
     setNumber: 0,
     sessionNumber: 0,
     globalSessionNumber: 0,
+    totalSets: 0,
+    periodsPerSet: 0,
     silent: true,
   });
 
@@ -64,6 +66,8 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       setNumber: 0,
       sessionNumber: i,
       globalSessionNumber: i,
+      totalSets: 0,
+      periodsPerSet: 0,
       popupLabel: resolveLabel('mindfulness', s),
     });
   }
@@ -83,6 +87,8 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       setNumber: 0,
       sessionNumber: count,
       globalSessionNumber: count,
+      totalSets: 0,
+      periodsPerSet: 0,
       popupLabel: resolveLabel('session_complete', s),
     });
   }
@@ -135,32 +141,69 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
     : s.multipleSets
       ? (s.numberOfSets === 0 ? computeMaxSets(s) : Math.max(1, s.numberOfSets))
       : 1;
+
+  // Stored values for event metadata: 0 = unlimited/not applicable
+  const storedTotalSets = isUnlimited ? 0 : numSets;
+  const storedPeriodsPerSet = isUnlimitedSessions ? 0 : sessionsPerSet;
+
   const totalSessions = numSets * sessionsPerSet;
   let offset = 0;
   let globalSession = 0;
   const prompt = includeMindfulness ? s.promptText : '';
 
+  // ── Body text helpers ──────────────────────────────────────────────
+
+  function workStartBody(set: number, period: number): string {
+    // set and period are already 1-based
+    if (storedTotalSets === 1) {
+      return `Break over! Period ${period} starting`;
+    }
+    const ofPart = storedTotalSets > 0 ? ` (of ${storedTotalSets} sets)` : '';
+    return `Break over! Set ${set}, Period ${period} starting${ofPart}`;
+  }
+
+  function shortBreakBody(set: number, period: number): string {
+    const dur = `${formatNum(s.breakMinutes)}-minute`;
+    if (storedTotalSets === 1) {
+      return `Period ${period} complete. Take a ${dur} break.`;
+    }
+    return `Set ${set}, Period ${period} complete. Take a ${dur} break.`;
+  }
+
+  function longBreakBody(set: number): string {
+    return `Set ${set} complete. Take a ${formatNum(s.longBreakMinutes)}-minute break.`;
+  }
+
+  function sessionCompleteBody(timeStr: string): string {
+    if (numSets > 1) {
+      return `${numSets} sets × ${sessionsPerSet} periods × ${formatNum(s.workMinutes)} min = ${timeStr}`;
+    }
+    return `${sessionsPerSet} periods × ${formatNum(s.workMinutes)} min = ${timeStr}`;
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+
   for (let set = 0; set < numSets; set++) {
     for (let session = 0; session < sessionsPerSet; session++) {
       globalSession++;
       const isFirst = globalSession === 1;
+      const set1 = set + 1;
+      const period1 = session + 1;
 
       // --- Work phase ---
       events.push({
         offsetSeconds: offset,
         type: 'work_start',
-        title: isFirst ? '' : (session === 0 && set > 0 ? 'New set starting' : 'Back to work'),
-        body: isFirst
-          ? ''
-          : (session === 0 && set > 0
-              ? `Set ${set} complete! Set ${set + 1} starting.\nSession ${globalSession}${(isUnlimited || isUnlimitedSessions) ? '' : ` of ${totalSessions}`}. (${formatNum(s.workMinutes)}-min work session)`
-              : `Break over! Session ${globalSession}${(isUnlimited || isUnlimitedSessions) ? '' : ` of ${totalSessions}`} starting. (${formatNum(s.workMinutes)}-min work session)`),
+        title: isFirst ? '' : 'Break over!',
+        body: isFirst ? '' : workStartBody(set1, period1),
         promptText: prompt,
-        setNumber: set + 1,
-        sessionNumber: session + 1,
+        setNumber: set1,
+        sessionNumber: period1,
         globalSessionNumber: globalSession,
+        totalSets: storedTotalSets,
+        periodsPerSet: storedPeriodsPerSet,
         popupLabel: resolveLabel('work_start', s),
-        silent: isFirst, // Don't popup on initial session start
+        silent: isFirst,
       });
 
       // Mid-work mindfulness reminders
@@ -172,9 +215,11 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
             title: '',
             body: '',
             promptText: s.promptText,
-            setNumber: set + 1,
-            sessionNumber: session + 1,
+            setNumber: set1,
+            sessionNumber: period1,
             globalSessionNumber: globalSession,
+            totalSets: storedTotalSets,
+            periodsPerSet: storedPeriodsPerSet,
             popupLabel: resolveLabel('mindfulness', s),
           });
         }
@@ -183,40 +228,42 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
       offset += workSec;
 
       // --- Break phase ---
-      const isLastSessionOfSet = session === sessionsPerSet - 1;
+      const isLastPeriodOfSet = session === sessionsPerSet - 1;
       const isLastSet = set === numSets - 1;
 
-      if (isLastSessionOfSet && isLastSet) {
+      if (isLastPeriodOfSet && isLastSet) {
         // Session complete
         const totalMin = offset / 60;
         const hours = Math.floor(totalMin / 60);
         const mins = Math.round(totalMin % 60);
         const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-        const setsLabel = isUnlimited ? 'unlimited sets' : `${numSets} set${numSets > 1 ? 's' : ''}`;
-        const sessionsLabel = isUnlimitedSessions ? '∞ sessions' : `${totalSessions} session${totalSessions !== 1 ? 's' : ''}`;
 
         events.push({
           offsetSeconds: offset,
           type: 'session_complete',
           title: 'Great work!',
-          body: `${sessionsLabel}${numSets > 1 ? ` across ${setsLabel}` : ''} in ${timeStr}.`,
+          body: sessionCompleteBody(timeStr),
           promptText: prompt,
-          setNumber: set + 1,
-          sessionNumber: session + 1,
+          setNumber: set1,
+          sessionNumber: period1,
           globalSessionNumber: globalSession,
+          totalSets: storedTotalSets,
+          periodsPerSet: storedPeriodsPerSet,
           popupLabel: resolveLabel('session_complete', s),
         });
-      } else if (isLastSessionOfSet && !isLastSet) {
+      } else if (isLastPeriodOfSet && !isLastSet) {
         // Long break between sets
         events.push({
           offsetSeconds: offset,
           type: 'long_break',
-          title: `Set ${set + 1} complete!`,
-          body: `Take a ${formatNum(s.longBreakMinutes)}-minute break.`,
+          title: 'Break!',
+          body: longBreakBody(set1),
           promptText: prompt,
-          setNumber: set + 1,
-          sessionNumber: session + 1,
+          setNumber: set1,
+          sessionNumber: period1,
           globalSessionNumber: globalSession,
+          totalSets: storedTotalSets,
+          periodsPerSet: storedPeriodsPerSet,
           popupLabel: resolveLabel('long_break', s),
         });
         offset += longBreakSec;
@@ -225,12 +272,14 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
         events.push({
           offsetSeconds: offset,
           type: 'short_break',
-          title: `Session ${globalSession} complete!`,
-          body: `Take a ${formatNum(s.breakMinutes)}-minute break.`,
+          title: 'Break!',
+          body: shortBreakBody(set1, period1),
           promptText: prompt,
-          setNumber: set + 1,
-          sessionNumber: session + 1,
+          setNumber: set1,
+          sessionNumber: period1,
           globalSessionNumber: globalSession,
+          totalSets: storedTotalSets,
+          periodsPerSet: storedPeriodsPerSet,
           popupLabel: resolveLabel('short_break', s),
         });
         offset += breakSec;

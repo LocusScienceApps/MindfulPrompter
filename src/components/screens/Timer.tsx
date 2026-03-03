@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Settings, TimerEvent, SessionStats } from '@/lib/types';
 import { computeSchedule } from '@/lib/schedule';
 import { formatCountdown } from '@/lib/format';
@@ -41,6 +41,7 @@ function getCurrentPhase(
   phaseProgress: number;
   timeLeft: number;
   contextLines: string[];
+  detailLine: React.ReactNode | null;
 } {
   let lastFired: TimerEvent | null = null;
   let nextEvent: TimerEvent | null = null;
@@ -61,6 +62,7 @@ function getCurrentPhase(
       phaseProgress: 0,
       timeLeft: nextEvent ? nextEvent.offsetSeconds - elapsed : 0,
       contextLines: [],
+      detailLine: null,
     };
   }
 
@@ -74,6 +76,7 @@ function getCurrentPhase(
   let phase = 'work';
   let phaseLabel = 'Working';
   const contextLines: string[] = [];
+  let detailLine: React.ReactNode | null = null;
 
   switch (lastFired.type) {
     case 'work_start':
@@ -95,10 +98,27 @@ function getCurrentPhase(
       break;
   }
 
-  // Context info — only show set/session for pomodoro modes
+  // Context info — only show set/period for pomodoro modes
   if (mode !== 'mindfulness' && lastFired.setNumber > 0) {
-    const setInfo = lastFired.setNumber > 0 ? `Set ${lastFired.setNumber}, ` : '';
-    contextLines.push(`${setInfo}Session ${lastFired.globalSessionNumber}`);
+    const { setNumber, sessionNumber, totalSets, periodsPerSet } = lastFired;
+
+    if (totalSets > 1) {
+      // Multiple defined sets: "Set 2, Period 3" + detail line below
+      contextLines.push(`Set ${setNumber}, Period ${sessionNumber}`);
+      if (periodsPerSet > 0) {
+        detailLine = (
+          <span>
+            out of {totalSets} <em>{periodsPerSet}-period</em> sets
+          </span>
+        );
+      }
+    } else if (periodsPerSet > 0) {
+      // Single set, finite periods: "Period 3 of 4"
+      contextLines.push(`Period ${sessionNumber} of ${periodsPerSet}`);
+    } else {
+      // Single set, unlimited periods: "Period 3"
+      contextLines.push(`Period ${sessionNumber}`);
+    }
   }
 
   // Next event countdown
@@ -114,7 +134,7 @@ function getCurrentPhase(
     }
   }
 
-  return { phase, phaseLabel, phaseProgress, timeLeft, contextLines };
+  return { phase, phaseLabel, phaseProgress, timeLeft, contextLines, detailLine };
 }
 
 /** Request notification permission */
@@ -256,7 +276,7 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
                   ? 'Long break started'
                   : event.type === 'session_complete'
                     ? 'Session complete!'
-                    : event.title || 'Work session started';
+                    : event.title || 'Work period started';
           setLog((prev) => [...prev, { time: formatTime(), message: logMsg }]);
         }
       }
@@ -297,7 +317,7 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
     onStop(buildStats());
   };
 
-  const { phase, phaseLabel, phaseProgress, timeLeft, contextLines } =
+  const { phase, phaseLabel, phaseProgress, timeLeft, contextLines, detailLine } =
     getCurrentPhase(elapsed, scheduleRef.current, settings.mode);
 
   const ringColor =
@@ -338,12 +358,17 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
         />
       </div>
 
+      {/* Position detail — "out of 4 5-period sets" with italic emphasis */}
+      {detailLine && (
+        <p className="text-center text-sm text-gray-500 -mt-3">{detailLine}</p>
+      )}
+
       {/* Elapsed time — shows that the session is actively running */}
       <p className="text-center text-sm text-gray-400">
         Session running: {formatCountdown(Math.floor(elapsed))}
       </p>
 
-      {/* Additional context */}
+      {/* Additional context (next event countdown etc.) */}
       {contextLines.length > 1 && (
         <div className="text-center">
           {contextLines.slice(1).map((line, i) => (

@@ -55,7 +55,7 @@ export default function NotificationOverlay({
 
   const DEFAULT_LABELS: Record<string, string> = {
     mindfulness:      'Mindfulness Prompt',
-    work_start:       'Work Session',
+    work_start:       'Work Period',
     short_break:      'Short Break',
     long_break:       'Long Break',
     session_complete: 'Session Done',

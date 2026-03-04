@@ -58,6 +58,7 @@ export function getDefaults(mode: AppMode): Settings {
         // Mindfulness defaults (interval = work / 2)
         promptIntervalMinutes: 12.5,
         promptCount: 0,
+        bothMindfulnessScope: 'work-only' as const,
       };
   }
 }
@@ -121,6 +122,8 @@ export function generatePresetName(mode: AppMode, settings: Settings): string {
       diffs.push(`${settings.dismissSeconds}s delay`);
     if (mode === 'mindfulness' && settings.promptCount > 0)
       diffs.push(`${settings.promptCount} prompts`);
+    if (mode === 'both' && settings.bothMindfulnessScope && settings.bothMindfulnessScope !== 'work-only')
+      diffs.push(`prompt scope: ${settings.bothMindfulnessScope}`);
   }
 
   if (diffs.length === 0) return 'Custom preset';

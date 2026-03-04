@@ -9,18 +9,20 @@ interface NotificationData {
   body: string;
   promptText: string;
   dismissSeconds: number;
-  /** undefined = use event-type default; "" = no label; other = custom label */
-  popupLabel?: string | null;
   /** If true, popup auto-dismisses when countdown reaches 0 (hard break). */
   autoClose?: boolean;
+  /** M-mode only: which prompt number this is (1-based). */
+  sessionNumber?: number;
+  /** M-mode only: total prompts in this session. undefined = indefinite. */
+  promptCountTotal?: number;
 }
 
-const EVENT_META: Record<string, { label: string; accent: string }> = {
-  mindfulness:      { label: 'Mindfulness Prompt', accent: 'bg-indigo-500' },
-  work_start:       { label: 'Work Period',          accent: 'bg-emerald-500' },
-  short_break:      { label: 'Short Break',         accent: 'bg-amber-400' },
-  long_break:       { label: 'Long Break',          accent: 'bg-orange-400' },
-  session_complete: { label: 'Session Done',        accent: 'bg-gray-400' },
+const EVENT_META: Record<string, { accent: string }> = {
+  mindfulness:      { accent: 'bg-indigo-500' },
+  work_start:       { accent: 'bg-emerald-500' },
+  short_break:      { accent: 'bg-amber-400' },
+  long_break:       { accent: 'bg-orange-400' },
+  session_complete: { accent: 'bg-gray-400' },
 };
 
 export default function PopupPage() {
@@ -49,8 +51,9 @@ export default function PopupPage() {
     if (eventType) {
       // Load notification data from URL params (dev mode)
       const dismissSeconds = parseInt(params.get('dismissSeconds') ?? '5', 10);
-      const rawLabel = params.get('popupLabel');
       const autoClose = params.get('autoClose') === 'true';
+      const sessionNumberParam = params.get('sessionNumber');
+      const promptCountTotalParam = params.get('promptCountTotal');
       autoCloseRef.current = autoClose;
       setData({
         eventType,
@@ -58,8 +61,9 @@ export default function PopupPage() {
         body: params.get('body') ?? '',
         promptText: params.get('promptText') ?? '',
         dismissSeconds,
-        popupLabel: rawLabel, // null = use default, '' = no label, text = custom
         autoClose,
+        sessionNumber: sessionNumberParam ? parseInt(sessionNumberParam, 10) : undefined,
+        promptCountTotal: promptCountTotalParam ? parseInt(promptCountTotalParam, 10) : undefined,
       });
       setCountdown(dismissSeconds);
     } else if (isTauri()) {
@@ -195,14 +199,16 @@ export default function PopupPage() {
     return <div style={{ minHeight: '100vh', background: '#fff' }} />;
   }
 
-  const { eventType, title, body, promptText, popupLabel } = data;
+  const { eventType, title, body, promptText, sessionNumber, promptCountTotal } = data;
   const meta = EVENT_META[eventType] ?? EVENT_META.mindfulness;
   const hasPrompt = promptText.length > 0;
   const hasContext = title || body;
-  // popupLabel: null = use default, '' = hide label, string = custom label
-  const displayLabel = popupLabel === null || popupLabel === undefined
-    ? meta.label
-    : popupLabel; // '' means no label shown
+
+  // Prompt counter: shown only in M-mode mindfulness events
+  const showCounter = eventType === 'mindfulness' && sessionNumber && sessionNumber > 0;
+  const counterText = showCounter
+    ? (promptCountTotal ? `Prompt ${sessionNumber} of ${promptCountTotal}` : `Prompt ${sessionNumber}`)
+    : null;
 
   return (
     // Dark fullscreen background covering the active monitor
@@ -212,17 +218,17 @@ export default function PopupPage() {
         {/* Thin colored accent strip at top */}
         <div className={`absolute left-0 right-0 top-0 h-1 ${meta.accent}`} />
 
-        {/* Event type label */}
-        {displayLabel && (
-          <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
-            {displayLabel}
-          </p>
-        )}
-
         {/* Prompt text */}
         {hasPrompt && (
           <p className="text-center text-xl font-semibold leading-snug text-gray-900">
             {promptText}
+          </p>
+        )}
+
+        {/* Prompt counter (M-mode only) */}
+        {counterText && (
+          <p className="mt-2 text-center text-xs font-medium text-gray-400 uppercase tracking-widest">
+            {counterText}
           </p>
         )}
 

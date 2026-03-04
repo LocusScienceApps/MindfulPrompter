@@ -5,6 +5,9 @@
 /** The three usage modes */
 export type AppMode = 'mindfulness' | 'pomodoro' | 'both';
 
+/** Controls which popups show the mindfulness prompt in Both mode */
+export type MindfulnessScope = 'work-only' | 'breaks' | 'work-starts' | 'all';
+
 /** All configurable settings */
 export interface Settings {
   mode: AppMode;
@@ -23,18 +26,13 @@ export interface Settings {
   dismissSeconds: number;
   /** M-mode only: number of prompts before session ends. 0 = run indefinitely. */
   promptCount: number;
+  /** Both mode only: which popup types show the mindfulness prompt. Default: 'work-only'. */
+  bothMindfulnessScope?: MindfulnessScope;
 
   // Global
   playSound: boolean;
   /** P and B modes only: if true, break popups fill the full break duration and cannot be dismissed early. */
   hardBreak?: boolean;
-
-  // Custom popup labels (undefined = use built-in default; "" = show no label)
-  popupLabelMindfulness?: string;
-  popupLabelWorkStart?: string;
-  popupLabelShortBreak?: string;
-  popupLabelLongBreak?: string;
-  popupLabelSessionDone?: string;
 }
 
 /** A scheduled event in the timer */
@@ -52,14 +50,14 @@ export interface TimerEvent {
   totalSets: number;
   /** Periods per set. 0 = unlimited or not applicable. */
   periodsPerSet: number;
-  /** Custom popup label to display. undefined = use event-type default; "" = no label. */
-  popupLabel?: string;
   /** Per-event dismiss delay (seconds). Overrides settings.dismissSeconds when set. */
   dismissSeconds?: number;
   /** If true, popup auto-dismisses when countdown reaches 0. Used for hard breaks. */
   autoClose?: boolean;
   /** If true, don't show a popup/notification for this event (e.g., initial session start) */
   silent?: boolean;
+  /** M-mode only: total number of prompts in this session. 0 or undefined = indefinite. */
+  promptCountTotal?: number;
 }
 
 /** Messages sent from the Web Worker to the main thread */

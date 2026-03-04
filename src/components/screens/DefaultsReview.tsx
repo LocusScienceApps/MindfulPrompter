@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Settings, PresetSlot } from '@/lib/types';
+import type { Settings, PresetSlot, MindfulnessScope } from '@/lib/types';
 import { listPresetsForMode, renamePreset, deletePreset } from '@/lib/storage';
 import { formatNum } from '@/lib/format';
 import Button from '../ui/Button';
@@ -144,35 +144,13 @@ export default function DefaultsReview({
                   }
                 />
               )}
+              {mode === 'both' && (
+                <SettingRow label="Mindfulness shows" value={scopeLabel(settings.bothMindfulnessScope)} />
+              )}
             </>
           )}
 
           <SettingRow label="Sound" value={settings.playSound ? 'On' : 'Off'} />
-
-          {/* Popup labels — only shown when at least one is customized */}
-          {(() => {
-            const labels: { label: string; value: string }[] = [];
-            if (mode === 'mindfulness' || mode === 'both') {
-              if (settings.popupLabelMindfulness) labels.push({ label: 'Mindfulness prompt popup', value: settings.popupLabelMindfulness });
-            }
-            if (mode === 'pomodoro' || mode === 'both') {
-              if (settings.popupLabelWorkStart) labels.push({ label: 'Work period start popup', value: settings.popupLabelWorkStart });
-              if (settings.popupLabelShortBreak) labels.push({ label: 'Short break popup', value: settings.popupLabelShortBreak });
-              if (settings.multipleSets && settings.popupLabelLongBreak) labels.push({ label: 'Long break popup', value: settings.popupLabelLongBreak });
-              if (settings.popupLabelSessionDone) labels.push({ label: 'Session finished popup', value: settings.popupLabelSessionDone });
-            }
-            if (labels.length === 0) return null;
-            return (
-              <>
-                <div className="pt-1 pb-0.5">
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Popup labels</span>
-                </div>
-                {labels.map(({ label, value }) => (
-                  <SettingRow key={label} label={label} value={`"${value}"`} />
-                ))}
-              </>
-            );
-          })()}
         </dl>
       </div>
 
@@ -268,4 +246,13 @@ function SettingRow({ label, value }: { label: string; value: string }) {
       <dd className="font-medium text-gray-800 text-right">{value}</dd>
     </div>
   );
+}
+
+function scopeLabel(scope: MindfulnessScope | undefined): string {
+  switch (scope) {
+    case 'breaks':      return 'Intervals + at each break';
+    case 'work-starts': return 'Intervals + returning from breaks';
+    case 'all':         return 'All popups';
+    default:            return 'At work intervals only';
+  }
 }

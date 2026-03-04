@@ -10,8 +10,9 @@ export async function showNotificationWindow(
   body: string,
   promptText: string,
   dismissSeconds: number,
-  popupLabel?: string,
   autoClose?: boolean,
+  sessionNumber?: number,
+  promptCountTotal?: number,
 ): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('show_notification', {
@@ -20,8 +21,9 @@ export async function showNotificationWindow(
     body,
     promptText,
     dismissSeconds,
-    popupLabel,
     autoClose: autoClose ?? false,
+    sessionNumber: sessionNumber ?? 0,
+    promptCountTotal: promptCountTotal ?? null,
   });
 }
 

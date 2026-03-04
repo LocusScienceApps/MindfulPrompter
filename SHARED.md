@@ -367,6 +367,82 @@ public/
 
 ---
 
+### Session 19 — 2026-03-04 (wmben PC — Items 4, 5, 6)
+
+**What was done:**
+
+**Item 4 — Mindfulness scope (Both mode)**
+- New `MindfulnessScope` type (`'work-only' | 'breaks' | 'work-starts' | 'all'`)
+- New `bothMindfulnessScope` setting (default: `'work-only'`)
+- Previously: every popup in Both mode showed the mindfulness prompt
+- Now: prompt only fires where the scope setting says it should
+- schedule.ts: selective `promptText` assignment per event type based on scope
+- Customize.tsx: 4-option selector in Mindfulness section (Both mode only)
+- DefaultsReview + Summary: "Mindfulness shows" row added to settings table
+- defaults.ts: `bothMindfulnessScope: 'work-only'` added to Both mode defaults + preset name diff
+
+**Item 5 — Remove all popup labels, update title strings**
+- Deleted all `popupLabel*` fields from Settings, `popupLabel` from TimerEvent
+- Deleted: `resolveLabel()` in schedule.ts, "Popup Labels" section in Customize.tsx, label blocks in DefaultsReview/Summary/NotificationOverlay, label rendering in popup/page.tsx, `popup_label` param in lib.rs/tauri.ts
+- Updated title strings in schedule.ts:
+  - Long break: "Set complete! Long break starting."
+  - Work start after short break: "Break over. Back to Work!"
+  - Work start after long break: "Long break over. Time to start the next set!"
+  - Session complete: "Session Complete! Great Work!"
+- Removed "Break over! " prefix from work_start body (it's in the title now)
+- M-mode session_complete: shows prompt text + uses `dismissSeconds` (it IS a mindfulness moment)
+- P-mode + Both-mode session_complete: `dismissSeconds: 0` (immediately dismissible); Both shows prompt only if scope includes breaks
+
+**Item 6 — Prompt counter in M-mode popup**
+- `promptCountTotal?: number` added to `TimerEvent`
+- schedule.ts: set on all M-mode mindfulness events (undefined if indefinite)
+- lib.rs: `prompt_count_total: Option<u32>` + `session_number: u32` added to NotificationData and URL params
+- tauri.ts: `popupLabel` removed; `sessionNumber` + `promptCountTotal` added
+- Timer.tsx: updated `showNotificationWindow` call signature
+- popup/page.tsx: renders "Prompt X of Y" (finite) or "Prompt X" (indefinite) below prompt text, M-mode mindfulness events only
+
+**Current state:**
+- TypeScript clean, build passes
+- NOT TESTED — committed at end of session, needs testing next time
+
+**Next steps for AI (start here next session):**
+1. **Test Items 4, 5, 6** — run `dev-browser.bat`, then:
+
+   **Item 4 — Mindfulness scope:**
+   - Both mode → Customize → Mindfulness section: verify 4 scope options appear
+   - "At work intervals only" (default): prompt only fires at mid-work intervals — NOT on break or work-start popups
+   - "Intervals + at each break": prompt also appears on short break, long break, and session complete
+   - "Intervals + returning from breaks": prompt appears on "back to work" popup
+   - "All popups": all of the above
+   - DefaultsReview shows "Mindfulness shows" row; Summary shows it after saving
+
+   **Item 5 — No labels, new titles:**
+   - All modes: verify NO label text appears in any popup (no "Mindfulness Prompt", "Short Break", etc.)
+   - Trigger long break: title = "Set complete! Long break starting."
+   - Return from short break: title = "Break over. Back to Work!" — body should NOT start with "Break over! "
+   - Return from long break: title = "Long break over. Time to start the next set!"
+   - Session complete: title = "Session Complete! Great Work!"
+   - M-mode session complete: prompt text appears + must wait dismissSeconds before OK
+   - P-mode session complete: OK button is immediately clickable (no wait)
+   - Both mode session complete with scope "work-only": no prompt, immediately dismissible
+   - Both mode session complete with scope "breaks" or "all": prompt appears + must wait
+
+   **Item 6 — Prompt counter:**
+   - M-mode, finite count (e.g., 3 prompts): popup shows "Prompt 1 of 3", "Prompt 2 of 3", "Prompt 3 of 3"
+   - M-mode, indefinite (promptCount=0): popup shows "Prompt 1", "Prompt 2", etc.
+   - Both mode: no counter shown in any popup
+   - Pomodoro mode: no counter shown
+
+   **Also test in Tauri** (`dev-tauri.bat`): same checks for the native popup window
+
+2. Fix any bugs found
+3. After all tests pass: proceed to remaining Phase 2 (settings storage → Tauri file API)
+
+**Open questions:**
+- None carried forward.
+
+---
+
 ### Session 18 — 2026-03-04 (wmben PC — settings bug fixes in Customize.tsx)
 
 **What was done:**

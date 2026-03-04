@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Settings } from '@/lib/types';
+import type { Settings, MindfulnessScope } from '@/lib/types';
 import {
   getDefaults,
   defaultBreakMinutes,
@@ -354,54 +354,20 @@ export default function Customize({
               />
             </SettingField>
           )}
+
+          {mode === 'both' && (
+            <SettingField
+              label="Which popups show the mindfulness prompt?"
+              helper="By default, the prompt only appears at timed intervals during work."
+            >
+              <ScopeSelector
+                value={s.bothMindfulnessScope ?? 'work-only'}
+                onChange={(v) => update({ bothMindfulnessScope: v })}
+              />
+            </SettingField>
+          )}
         </Section>
       )}
-
-      {/* ── Popup Labels ── */}
-      <Section title="Popup Labels">
-        <p className="text-xs text-gray-400 leading-snug">
-          Labels shown at the top of each popup. Leave blank to use the default.
-          Type a single dash ( - ) to show no label.
-        </p>
-        {(mode === 'mindfulness' || mode === 'both') && (
-          <LabelInput
-            label="Mindfulness prompt popup"
-            defaultLabel="Mindfulness Prompt"
-            value={s.popupLabelMindfulness}
-            onChange={(v) => update({ popupLabelMindfulness: v })}
-          />
-        )}
-        {(mode === 'pomodoro' || mode === 'both') && (
-          <>
-            <LabelInput
-              label="Work period start"
-              defaultLabel="Work Period"
-              value={s.popupLabelWorkStart}
-              onChange={(v) => update({ popupLabelWorkStart: v })}
-            />
-            <LabelInput
-              label="Short break"
-              defaultLabel="Short Break"
-              value={s.popupLabelShortBreak}
-              onChange={(v) => update({ popupLabelShortBreak: v })}
-            />
-            {s.multipleSets && (
-              <LabelInput
-                label="Long break (between sets)"
-                defaultLabel="Long Break"
-                value={s.popupLabelLongBreak}
-                onChange={(v) => update({ popupLabelLongBreak: v })}
-              />
-            )}
-            <LabelInput
-              label="Session finished"
-              defaultLabel="Session Done"
-              value={s.popupLabelSessionDone}
-              onChange={(v) => update({ popupLabelSessionDone: v })}
-            />
-          </>
-        )}
-      </Section>
 
       {/* ── Sound ── */}
       <Section title="Sound">
@@ -493,51 +459,42 @@ function YesNoToggle({
   );
 }
 
-function LabelInput({
-  label,
-  defaultLabel,
+const SCOPE_OPTIONS: { value: MindfulnessScope; label: string; description: string }[] = [
+  { value: 'work-only',   label: 'At work intervals only',       description: 'Prompt fires at timed intervals during work — not during breaks or transitions.' },
+  { value: 'breaks',      label: 'Intervals + at each break',    description: 'Also shown when a break starts and when the session ends.' },
+  { value: 'work-starts', label: 'Intervals + returning from breaks', description: 'Also shown when returning to work after each break.' },
+  { value: 'all',         label: 'All popups',                   description: 'Shown at intervals, at each break, and when returning to work.' },
+];
+
+function ScopeSelector({
   value,
   onChange,
 }: {
-  label: string;
-  defaultLabel: string;
-  /** undefined = use built-in default; '' = no label; other = custom */
-  value: string | undefined;
-  onChange: (v: string | undefined) => void;
+  value: MindfulnessScope;
+  onChange: (v: MindfulnessScope) => void;
 }) {
-  // We track the raw text the user types. '-' means "no label" (stored as '').
-  // Empty input means "use default" (stored as undefined).
-  const [raw, setRaw] = useState<string>(() => {
-    if (value === undefined) return '';
-    if (value === '') return '-';
-    return value;
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const text = e.target.value;
-    setRaw(text);
-    if (text === '') {
-      onChange(undefined); // revert to default
-    } else if (text === '-') {
-      onChange(''); // no label
-    } else {
-      onChange(text);
-    }
-  };
-
   return (
-    <SettingField label={label} helper={`Default: "${defaultLabel}". Type - (dash) for no label.`}>
-      <input
-        type="text"
-        value={raw}
-        onChange={handleChange}
-        placeholder={defaultLabel}
-        className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-      />
-      {value === '' && (
-        <p className="mt-1 text-xs text-gray-500">No label will be shown.</p>
-      )}
-    </SettingField>
+    <div className="space-y-2">
+      {SCOPE_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={`w-full rounded-lg border-2 px-3 py-2 text-left transition-colors ${
+            value === opt.value
+              ? 'border-indigo-500 bg-indigo-600 text-white'
+              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+          }`}
+        >
+          <p className={`text-sm font-medium ${value === opt.value ? 'text-white' : 'text-gray-800'}`}>
+            {opt.label}
+          </p>
+          <p className={`text-xs mt-0.5 ${value === opt.value ? 'text-indigo-100' : 'text-gray-400'}`}>
+            {opt.description}
+          </p>
+        </button>
+      ))}
+    </div>
   );
 }
 

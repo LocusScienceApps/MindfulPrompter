@@ -1,19 +1,5 @@
-import type { Settings, TimerEvent } from './types';
+import type { Settings, TimerEvent, MindfulnessScope } from './types';
 import { formatNum } from './format';
-
-/** Resolve custom popup label for an event type from settings. */
-function resolveLabel(
-  type: TimerEvent['type'],
-  s: Settings,
-): string | undefined {
-  switch (type) {
-    case 'mindfulness':      return s.popupLabelMindfulness;
-    case 'work_start':       return s.popupLabelWorkStart;
-    case 'short_break':      return s.popupLabelShortBreak;
-    case 'long_break':       return s.popupLabelLongBreak;
-    case 'session_complete': return s.popupLabelSessionDone;
-  }
-}
 
 /**
  * Compute the full schedule of events from settings.
@@ -40,6 +26,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
   const events: TimerEvent[] = [];
   const intervalSec = s.promptIntervalMinutes * 60;
   const count = s.promptCount > 0 ? s.promptCount : Math.floor((24 * 3600) / intervalSec);
+  const promptCountTotal = s.promptCount > 0 ? s.promptCount : undefined;
 
   // Initial silent event at t=0 to mark session start
   events.push({
@@ -68,7 +55,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       globalSessionNumber: i,
       totalSets: 0,
       periodsPerSet: 0,
-      popupLabel: resolveLabel('mindfulness', s),
+      promptCountTotal,
     });
   }
 
@@ -81,7 +68,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
     events.push({
       offsetSeconds: count * intervalSec + 2,
       type: 'session_complete',
-      title: 'Session complete!',
+      title: 'Session Complete! Great Work!',
       body: `${count} prompt${count !== 1 ? 's' : ''} in ${timeStr}.`,
       promptText: s.promptText,
       setNumber: 0,
@@ -89,7 +76,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       globalSessionNumber: count,
       totalSets: 0,
       periodsPerSet: 0,
-      popupLabel: resolveLabel('session_complete', s),
+      dismissSeconds: s.dismissSeconds,
     });
   }
 
@@ -146,20 +133,31 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
   const storedTotalSets = isUnlimited ? 0 : numSets;
   const storedPeriodsPerSet = isUnlimitedSessions ? 0 : sessionsPerSet;
 
-  const totalSessions = numSets * sessionsPerSet;
   let offset = 0;
   let globalSession = 0;
-  const prompt = includeMindfulness ? s.promptText : '';
+
+  // Mindfulness scope: determines which event types show the prompt in Both mode
+  const scope: MindfulnessScope = includeMindfulness
+    ? (s.bothMindfulnessScope ?? 'work-only')
+    : 'work-only';
+
+  const showPromptOn = {
+    mindfulness: includeMindfulness,
+    workStart: includeMindfulness && (scope === 'work-starts' || scope === 'all'),
+    shortBreak: includeMindfulness && (scope === 'breaks' || scope === 'all'),
+    longBreak: includeMindfulness && (scope === 'breaks' || scope === 'all'),
+    sessionComplete: includeMindfulness && (scope === 'breaks' || scope === 'all'),
+  };
 
   // ── Body text helpers ──────────────────────────────────────────────
 
   function workStartBody(set: number, period: number): string {
     // set and period are already 1-based
     if (storedTotalSets === 1) {
-      return `Break over! Period ${period} starting`;
+      return `Period ${period} starting`;
     }
     const ofPart = storedTotalSets > 0 ? ` (of ${storedTotalSets} sets)` : '';
-    return `Break over! Set ${set}, Period ${period} starting${ofPart}`;
+    return `Set ${set}, Period ${period} starting${ofPart}`;
   }
 
   function shortBreakBody(set: number, period: number): string {
@@ -190,19 +188,26 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
       const set1 = set + 1;
       const period1 = session + 1;
 
+      // After long break: first period of a new set (not the very first overall)
+      const isAfterLongBreak = !isFirst && period1 === 1 && set1 > 1;
+      const workStartTitle = isFirst
+        ? ''
+        : isAfterLongBreak
+          ? 'Long break over. Time to start the next set!'
+          : 'Break over. Back to Work!';
+
       // --- Work phase ---
       events.push({
         offsetSeconds: offset,
         type: 'work_start',
-        title: isFirst ? '' : 'Break over!',
+        title: workStartTitle,
         body: isFirst ? '' : workStartBody(set1, period1),
-        promptText: prompt,
+        promptText: showPromptOn.workStart && !isFirst ? s.promptText : '',
         setNumber: set1,
         sessionNumber: period1,
         globalSessionNumber: globalSession,
         totalSets: storedTotalSets,
         periodsPerSet: storedPeriodsPerSet,
-        popupLabel: resolveLabel('work_start', s),
         silent: isFirst,
       });
 
@@ -220,7 +225,6 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
             globalSessionNumber: globalSession,
             totalSets: storedTotalSets,
             periodsPerSet: storedPeriodsPerSet,
-            popupLabel: resolveLabel('mindfulness', s),
           });
         }
       }
@@ -241,30 +245,29 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
         events.push({
           offsetSeconds: offset,
           type: 'session_complete',
-          title: 'Great work!',
+          title: 'Session Complete! Great Work!',
           body: sessionCompleteBody(timeStr),
-          promptText: prompt,
+          promptText: showPromptOn.sessionComplete ? s.promptText : '',
           setNumber: set1,
           sessionNumber: period1,
           globalSessionNumber: globalSession,
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
-          popupLabel: resolveLabel('session_complete', s),
+          dismissSeconds: 0, // Pomodoro/Both session_complete is immediately dismissible
         });
       } else if (isLastPeriodOfSet && !isLastSet) {
         // Long break between sets
         events.push({
           offsetSeconds: offset,
           type: 'long_break',
-          title: 'Break!',
+          title: 'Set complete! Long break starting.',
           body: longBreakBody(set1),
-          promptText: prompt,
+          promptText: showPromptOn.longBreak ? s.promptText : '',
           setNumber: set1,
           sessionNumber: period1,
           globalSessionNumber: globalSession,
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
-          popupLabel: resolveLabel('long_break', s),
           ...(s.hardBreak === true && { dismissSeconds: longBreakSec, autoClose: true }),
         });
         offset += longBreakSec;
@@ -275,13 +278,12 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           type: 'short_break',
           title: 'Break!',
           body: shortBreakBody(set1, period1),
-          promptText: prompt,
+          promptText: showPromptOn.shortBreak ? s.promptText : '',
           setNumber: set1,
           sessionNumber: period1,
           globalSessionNumber: globalSession,
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
-          popupLabel: resolveLabel('short_break', s),
           ...(s.hardBreak === true && { dismissSeconds: breakSec, autoClose: true }),
         });
         offset += breakSec;

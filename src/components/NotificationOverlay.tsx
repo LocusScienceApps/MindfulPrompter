@@ -64,14 +64,6 @@ export default function NotificationOverlay({
 
   if (!event) return null;
 
-  const DEFAULT_LABELS: Record<string, string> = {
-    mindfulness:      'Mindfulness Prompt',
-    work_start:       'Work Period',
-    short_break:      'Short Break',
-    long_break:       'Long Break',
-    session_complete: 'Session Done',
-  };
-
   const accentClass = {
     mindfulness:      'bg-indigo-500',
     work_start:       'bg-emerald-500',
@@ -79,11 +71,6 @@ export default function NotificationOverlay({
     long_break:       'bg-orange-400',
     session_complete: 'bg-gray-400',
   }[event.type];
-
-  // popupLabel: undefined = use default, '' = hide, string = custom
-  const displayLabel = event.popupLabel === undefined
-    ? DEFAULT_LABELS[event.type]
-    : event.popupLabel;
 
   const hasPrompt = event.promptText && event.promptText.length > 0;
   const hasContext = event.title || event.body;
@@ -93,13 +80,6 @@ export default function NotificationOverlay({
       <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white px-8 py-6 shadow-2xl ring-1 ring-gray-200">
         {/* Thin colored accent strip at top */}
         <div className={`absolute left-0 right-0 top-0 h-1 ${accentClass}`} />
-
-        {/* Event type label */}
-        {displayLabel && (
-          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-widest text-gray-400">
-            {displayLabel}
-          </p>
-        )}
 
         {/* Mindfulness prompt text — prominent and front-and-center */}
         {hasPrompt && (

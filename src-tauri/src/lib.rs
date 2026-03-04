@@ -9,8 +9,11 @@ pub struct NotificationData {
     pub body: String,
     pub prompt_text: String,
     pub dismiss_seconds: u32,
-    pub popup_label: Option<String>,
     pub auto_close: bool,
+    /// M-mode only: which prompt number this is (1-based). 0 = not applicable.
+    pub session_number: u32,
+    /// M-mode only: total prompts in session. None = indefinite.
+    pub prompt_count_total: Option<u32>,
 }
 
 pub struct NotificationState(pub Mutex<Option<NotificationData>>);
@@ -82,8 +85,9 @@ async fn show_notification(
     body: String,
     prompt_text: String,
     dismiss_seconds: u32,
-    popup_label: Option<String>,
     auto_close: bool,
+    session_number: u32,
+    prompt_count_total: Option<u32>,
 ) -> Result<(), String> {
     // Store data so the popup page can fetch it via get_notification_data (used in prod builds)
     *state.0.lock().unwrap() = Some(NotificationData {
@@ -92,8 +96,9 @@ async fn show_notification(
         body: body.clone(),
         prompt_text: prompt_text.clone(),
         dismiss_seconds,
-        popup_label: popup_label.clone(),
         auto_close,
+        session_number,
+        prompt_count_total,
     });
 
     // Close any existing notification window first.
@@ -121,9 +126,10 @@ async fn show_notification(
             .append_pair("body", &body)
             .append_pair("promptText", &prompt_text)
             .append_pair("dismissSeconds", &dismiss_seconds.to_string())
-            .append_pair("autoClose", if auto_close { "true" } else { "false" });
-        if let Some(label) = &popup_label {
-            u.query_pairs_mut().append_pair("popupLabel", label);
+            .append_pair("autoClose", if auto_close { "true" } else { "false" })
+            .append_pair("sessionNumber", &session_number.to_string());
+        if let Some(total) = prompt_count_total {
+            u.query_pairs_mut().append_pair("promptCountTotal", &total.to_string());
         }
         WebviewUrl::External(u)
     };

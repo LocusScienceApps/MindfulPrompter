@@ -18,7 +18,7 @@ interface DefaultsReviewProps {
 const MODE_NAMES: Record<string, string> = {
   mindfulness: 'Mindfulness Prompts',
   pomodoro: 'Pomodoro Timer',
-  both: 'Both Together',
+  both: 'Mindfulness Prompts in Work Sessions',
 };
 
 export default function DefaultsReview({
@@ -34,6 +34,7 @@ export default function DefaultsReview({
   const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<{ slot: PresetSlot; name: string } | null>(null);
 
   const refreshPresets = () => setPresets(listPresetsForMode(mode));
 
@@ -54,6 +55,7 @@ export default function DefaultsReview({
     const preset = presets.find((p) => p.slot === slot);
     if (preset) {
       onLoadPreset(preset.preset.settings);
+      setSelectedPreset({ slot, name: preset.preset.name });
     }
   };
 
@@ -100,6 +102,11 @@ export default function DefaultsReview({
           <span className="text-gray-400 font-normal text-xl"> Mode</span>
         </h2>
         <p className="mt-1 text-gray-500">Current settings</p>
+        {selectedPreset && (
+          <p className="mt-1 text-sm text-indigo-600">
+            Preset selected: {selectedPreset.slot} — {selectedPreset.name}
+          </p>
+        )}
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

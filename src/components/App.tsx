@@ -112,6 +112,19 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
       <div className="mx-auto max-w-lg px-4 py-8">
+        {screen !== 'mode-select' && screen !== 'timer' && (
+          <div className="mb-5">
+            <button
+              onClick={() => setScreen('mode-select')}
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
+                <path d="M8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 8H3v5.5A1.5 1.5 0 0 0 4.5 15h2A.5.5 0 0 0 7 14.5V11h2v3.5a.5.5 0 0 0 .5.5h2a1.5 1.5 0 0 0 1.5-1.5V8h1.5a.5.5 0 0 0 .354-.854l-6-6z" />
+              </svg>
+              <span>MindfulPrompter</span>
+            </button>
+          </div>
+        )}
         {screen === 'mode-select' && (
           <ModeSelect onSelect={handleModeSelect} />
         )}
@@ -148,6 +161,8 @@ export default function App() {
             onSchedule={handleSchedule}
             onSaveAsDefault={handleSaveAsDefault}
             onBack={() => handleBack('customize')}
+            onCustomize={handleCustomize}
+            onLoadPreset={handleLoadPreset}
           />
         )}
         {screen === 'timer' && (

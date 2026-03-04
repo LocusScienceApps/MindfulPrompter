@@ -1,10 +1,11 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — Items 1–3b coded and tested ✅; Items 4–6 next
+## Status: Phase 2 (Tauri) in progress — Items 1–3b + UX polish done ✅; Items 4–6 next
 
 The Tauri wrapper exists and the native popup is working (fixed in Sessions 10–11).
-Session 16: Items 1, 2, 3, 3b implemented and tested. 7 UX bugs found and fixed (same session).
-Bug fixes committed. Next: test fixes in browser, then proceed to Items 4, 5, 6.
+Session 16: Items 1, 2, 3, 3b implemented and tested. 7 UX bugs found and fixed.
+Session 17: UX polish — mode rename, preset indicator, post-save layout redesign, home button.
+Next: test Session 17 changes in browser, then proceed to Items 4, 5, 6.
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 No need to manually unregister the service worker — the batch files handle port cleanup automatically.
@@ -20,8 +21,33 @@ No need to manually unregister the service worker — the batch files handle por
 ### 5. ✅ Items 1, 2, 3 coded and tested — DONE Session 16
 ### 6. ✅ Item 3b coded and tested — DONE Session 16
 ### 7. ✅ 7 UX bugs found and fixed — DONE Session 16
+### 8. ✅ Session 17 UX polish — DONE (mode rename, preset indicator, post-save layout, home button)
 
-### 8. Test bug fixes in browser (`dev-browser.bat`)
+### 9. Test Session 17 changes in browser (`dev-browser.bat`)
+
+**Mode rename:**
+- [ ] Mode-select landing page: "Both Together" card now reads "Mindfulness Prompts in Work Sessions"
+- [ ] Mode page heading: "**Mindfulness Prompts in Work Sessions** Mode" (indigo + gray)
+
+**Preset indicator:**
+- [ ] Mode page: click any preset → "Preset selected: B2 — Name" appears below "Current settings"
+- [ ] Click a different preset → indicator updates to new preset
+
+**Post-save view:**
+- [ ] Change Settings → save a preset → page shows DefaultsReview-style layout with preset indicator
+- [ ] "← Back to settings" link present and goes back to Change Settings
+- [ ] Preset list shown (including newly saved preset), with Rename/Delete working
+- [ ] Start Session, Schedule Start Time, Change Settings buttons all present and functional
+- [ ] Home button (⌂ MindfulPrompter) visible at top of screen
+
+**Home button:**
+- [ ] Home button appears on: mode page, Change Settings, Settings Updated, Scheduled Start, Session Complete
+- [ ] Home button NOT visible on: mode-select landing page, timer screen
+- [ ] Clicking home button from any screen returns to mode-select landing page
+
+---
+
+### 10. Test Session 16 bug fixes in browser (`dev-browser.bat`)
 
 **NumericInput fix:**
 - [ ] Go to Change Settings → change a value (e.g. work period to 30 min) → Review Changes → Back → values show as BLACK text, not gray placeholder

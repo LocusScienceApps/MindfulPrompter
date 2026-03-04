@@ -357,6 +357,41 @@ public/
 
 ---
 
+### Session 17 — 2026-03-04 (wmben PC — UX polish: mode rename, preset indicator, post-save layout, home button)
+
+**What was done:**
+
+**(A) "Both Together" mode renamed to "Mindfulness Prompts in Work Sessions"** (`ModeSelect.tsx`, `DefaultsReview.tsx`, `Summary.tsx`)
+- Updated `MODE_NAMES` and `modes` array across all three files
+- Heading now reads: **Mindfulness Prompts in Work Sessions** Mode
+
+**(B) Preset-selected indicator** (`DefaultsReview.tsx`)
+- Added `selectedPreset` state; set when user clicks a preset in the list
+- Shows "Preset selected: B3 — Name" in small indigo text below "Current settings"
+- Updates if user clicks a different preset
+
+**(C) Summary post-save view redesigned to match DefaultsReview layout** (`Summary.tsx`, `App.tsx`)
+- After saving a preset, Summary now renders: mode name header → "Current settings" subtitle → preset indicator → settings table → full preset list (with rename/delete/load) → 3 buttons (Start Session, Schedule Start Time, Change Settings)
+- Added `onCustomize` and `onLoadPreset` props to `SettingsUpdatedProps`; wired in `App.tsx`
+- "← Back to settings" link added to post-save view (goes back to Customize via `onBack`)
+- Post-save preset list is fully interactive: click to load, rename, delete
+- "Save as Preset" and "Save as Default" buttons only appear in the pre-save main view
+
+**(D) Persistent home button** (`App.tsx`)
+- Small "⌂ MindfulPrompter" link at top of content area
+- Shown on all screens except mode-select and timer (timer excluded to avoid accidental session abandonment)
+- Gray text, turns indigo on hover; clicking navigates to mode-select
+
+**Current state:**
+- All changes committed and pushed
+- TypeScript clean
+
+**Next steps:**
+1. Test Session 17 changes in browser (`dev-browser.bat`)
+2. Continue with Items 4, 5, 6 in order
+
+---
+
 ### Session 16 — 2026-03-04 (wmben PC — Phase 0 testing + Items 1, 2, 3, 3b coded + bug fixes)
 
 **What was done:**

@@ -71,7 +71,7 @@ const modes: { key: AppMode; title: string; description: string; icon: React.Rea
   },
   {
     key: 'both',
-    title: 'Both Together',
+    title: 'Mindfulness Prompts in Work Sessions',
     description: 'Mindfulness prompts within your work periods.',
     icon: <BothIcon />,
   },

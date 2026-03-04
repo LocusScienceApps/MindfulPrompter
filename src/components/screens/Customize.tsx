@@ -177,7 +177,7 @@ export default function Customize({
 
           <SettingField
             label='Work periods per set'
-            helper={`Default: ${initial.sessionsPerSet}. Enter 0 to run indefinitely (∞).`}
+            helper={`Default: ${initial.sessionsPerSet}. Enter 0 (= ∞) to run indefinitely.`}
           >
             <NumericInput
               value={s.sessionsPerSet}
@@ -187,11 +187,6 @@ export default function Customize({
               allowZero
               onChange={(v) => update({ sessionsPerSet: v, ...(v === 0 ? { multipleSets: false } : {}) })}
             />
-            {s.sessionsPerSet === 0 && (
-              <p className="mt-1 text-xs text-gray-500">
-                ∞ — runs indefinitely until you stop. Multiple sets disabled.
-              </p>
-            )}
           </SettingField>
 
           {s.sessionsPerSet !== 0 && (
@@ -221,7 +216,7 @@ export default function Customize({
 
               <SettingField
                 label="Number of sets"
-                helper={`Default: 3. Enter 0 to run until you stop.`}
+                helper="Default: 3. Enter 0 (= ∞) to run indefinitely."
               >
                 <NumericInput
                   value={s.numberOfSets}
@@ -231,11 +226,6 @@ export default function Customize({
                   allowZero
                   onChange={(v) => update({ numberOfSets: v })}
                 />
-                {s.numberOfSets === 0 && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Session cycles sets indefinitely until you click Stop.
-                  </p>
-                )}
               </SettingField>
             </>
           )}
@@ -297,7 +287,7 @@ export default function Customize({
           {mode === 'mindfulness' && (
             <SettingField
               label="Number of prompts"
-              helper={`Default: ${initial.promptCount === 0 ? '∞ (0 = runs indefinitely)' : initial.promptCount}. Enter 0 to run indefinitely (∞), or enter a number to stop after that many prompts.`}
+              helper={initial.promptCount === 0 ? 'Default: 0 (= ∞) to run indefinitely.' : `Default: ${initial.promptCount}. Enter 0 (= ∞) to run indefinitely.`}
             >
               <NumericInput
                 value={s.promptCount}
@@ -307,14 +297,6 @@ export default function Customize({
                 allowZero
                 onChange={(v) => update({ promptCount: v })}
               />
-              {s.promptCount > 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Session ends after {s.promptCount} prompt{s.promptCount !== 1 ? 's' : ''}.
-                </p>
-              )}
-              {s.promptCount === 0 && (
-                <p className="mt-1 text-xs text-gray-500">Session runs until you click Stop.</p>
-              )}
             </SettingField>
           )}
         </Section>

@@ -1,10 +1,11 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — needs testing + 6 features planned ⚠️
+## Status: Phase 2 (Tauri) in progress — Items 1–3 coded, need testing ⚠️
 
 The Tauri wrapper exists and the native popup is working (fixed in Sessions 10–11).
-Sessions 12–14 added significant improvements. **None have been tested on this PC.**
+Sessions 12–15 added significant improvements.
 Session 15 was a planning session — 6 features designed, no code written.
+Session 16: Phase 0 testing completed on this PC. Items 1, 2, 3 coded (not yet tested).
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 No need to manually unregister the service worker — the batch files handle port cleanup automatically.
@@ -13,7 +14,7 @@ No need to manually unregister the service worker — the batch files handle por
 
 ## Immediate next steps (in order)
 
-### 1. Test everything in browser first (`dev-browser.bat`)
+### 1. ✅ Test everything in browser first (`dev-browser.bat`) — DONE Session 16
 
 **Pomodoro mode — timer screen:**
 - [ ] Multiple sets: ring shows "Set 2, Period 3", detail line shows "out of 4 *5-period* sets"
@@ -45,36 +46,57 @@ No need to manually unregister the service worker — the batch files handle por
 - [ ] "Save as Default" confirmation + mode page updates
 - [ ] Reset to original defaults works
 
-### 2. Test Tauri app (`dev-tauri.bat`)
-- [ ] App launches without error (new PC, new username — Cargo path fixed)
-- [ ] Native popup appears (not blank white) for work_start, short_break, long_break, session_complete
-- [ ] New popup text formats display correctly in native window
-- [ ] Popup dismiss works; session_complete dismissal navigates to completion screen
+### 2. ✅ Test Tauri app (`dev-tauri.bat`) — DONE Session 16
+- [x] App launches without error
+- [x] Native popup appears and works
+- [x] Popup text formats correct
+- [x] Dismiss works
 
-### 3. Fix any bugs found
+### 3. ✅ Fix any bugs found — none found in Phase 0
 
-### 4. Integrate notes from other PC
-The other PC (wmben) may have session notes for Sessions 10–13 that were never pushed.
-When back on that PC, check Claude's memory files and any local SHARED.md edits.
-Merge those notes into this file and SHARED.md.
+### 4. ✅ Integrate notes from other PC — done
+
+### 5. Test Items 1, 2, 3 (coded in Session 16, NOT YET TESTED)
+
+**Test Item 1 — Helper text (browser only):**
+- [ ] Customize.tsx: sessionsPerSet helper reads "Default: N. Enter 0 (= ∞) to run indefinitely." — no sub-note
+- [ ] Customize.tsx: numberOfSets helper reads "Default: 3. Enter 0 (= ∞) to run indefinitely." — no sub-note
+- [ ] Customize.tsx: promptCount helper reads "Default: 0 (= ∞) to run indefinitely." or "Default: N. Enter 0 (= ∞)…" — no sub-notes
+
+**Test Item 2 — Preset name pre-filled (browser only):**
+- [ ] Summary.tsx: preset name field is pre-filled with the auto-generated name (not blank)
+- [ ] Placeholder still shows the auto name when field is cleared
+- [ ] "Leave blank to use auto-generated name" helper text is GONE
+
+**Test Item 3 — True popup blocking (Tauri only, `dev-tauri.bat`):**
+- [ ] Popup is fullscreen on the active monitor (where the main app window is)
+- [ ] Content (white card) is centered within the fullscreen dark background
+- [ ] On a multi-monitor setup: other monitors get a dark `notification-overlay-N` window
+- [ ] Dismissing the popup closes all overlay windows too
+- [ ] Overlay windows block Alt+F4 (can't be closed until popup is dismissed)
+- [ ] Single-monitor: popup is fullscreen, no overlay windows created
+- [ ] Popup replacement (new notification while one is open) closes old overlays + creates new ones
 
 ---
 
-## After testing passes — Session 15 features (Items 1–6, implement in order)
+## Session 15 features — status
 
-### Item 1 — Helper text standardization (`Customize.tsx`)
-- [ ] promptCount helper: dynamic — `"Default: 0 (= ∞) to run indefinitely."` or `"Default: N. Enter 0 (= ∞) to run indefinitely."`; remove sub-notes below field
-- [ ] sessionsPerSet helper: `"Default: N. Enter 0 (= ∞) to run indefinitely."`
-- [ ] numberOfSets helper: `"Default: 3. Enter 0 (= ∞) to run indefinitely."`
+### Item 1 — Helper text standardization (`Customize.tsx`) ✅ CODED
+- [x] promptCount helper: `"Default: 0 (= ∞) to run indefinitely."` or `"Default: N. Enter 0 (= ∞) to run indefinitely."` — sub-notes removed
+- [x] sessionsPerSet helper: `"Default: N. Enter 0 (= ∞) to run indefinitely."` — sub-note removed
+- [x] numberOfSets helper: `"Default: 3. Enter 0 (= ∞) to run indefinitely."` — sub-note removed
 
-### Item 2 — Preset name pre-filled (`Summary.tsx`)
-- [ ] Initialize `presetName` state to `autoName` (not `''`)
-- [ ] Remove helper text below name input field
+### Item 2 — Preset name pre-filled (`Summary.tsx`) ✅ CODED
+- [x] Initialize `presetName` state to `autoName` (not `''`)
+- [x] `setPresetName(autoName)` when re-opening the save flow
+- [x] Remove helper text below name input field
 
-### Item 3 — True popup blocking (`lib.rs`, `popup/page.tsx`)
-- [ ] Popup becomes fullscreen on active monitor; inner card stays ~480px centered
-- [ ] Additional monitors get dark fullscreen `notification-overlay-N` windows
-- [ ] `close_notification_window` closes all overlay windows
+### Item 3 — True popup blocking (`lib.rs`, `popup/page.tsx`, `capabilities/default.json`) ✅ CODED
+- [x] Popup becomes fullscreen on active monitor; white card (~480px) centered inside dark bg
+- [x] Additional monitors get dark fullscreen `notification-overlay-N` windows
+- [x] Overlay windows block close (Alt+F4) until `notification-replacing` or `session-stopped`
+- [x] `close_notification_window` closes all overlay windows (emits `notification-replacing` first)
+- [x] `capabilities/default.json` adds `notification-overlay-*` glob
 
 ### Item 3b — Hard break option (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`, `popup/page.tsx`)
 - [ ] New `hardBreak: boolean` setting (P and B modes, default false)

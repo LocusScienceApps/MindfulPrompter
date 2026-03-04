@@ -4,7 +4,8 @@
   "description": "enables the default permissions",
   "windows": [
     "main",
-    "notification"
+    "notification",
+    "notification-overlay-*"
   ],
   "permissions": [
     "core:default",

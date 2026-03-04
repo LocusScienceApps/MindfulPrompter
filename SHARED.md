@@ -357,6 +357,44 @@ public/
 
 ---
 
+### Session 16 — 2026-03-04 (wmben PC — Phase 0 testing + Items 1, 2, 3 coded)
+
+**What was done:**
+- Phase 0 testing passed (browser + Tauri) — all Sessions 10–14 features verified working
+- Implemented Items 1, 2, 3 from the Session 15 plan
+
+**Item 1 — Helper text standardization** (`Customize.tsx`)
+- All three "run indefinitely" fields now use `"Default: N. Enter 0 (= ∞) to run indefinitely."` phrasing
+- Removed sub-note paragraphs below each field (the helper text is now self-contained)
+- promptCount: dynamic — "Default: 0 (= ∞)..." when default is 0, "Default: N. Enter 0 (= ∞)..." when N
+
+**Item 2 — Preset name pre-filled** (`Summary.tsx`)
+- `presetName` state now initializes to `autoName` instead of `''`
+- Removed "Leave blank to use auto-generated name" helper text
+- `setPresetName(autoName)` when user re-opens the save flow (not `setPresetName('')`)
+- Placeholder still shows `autoName` when field is cleared
+
+**Item 3 — True popup blocking** (`lib.rs`, `popup/page.tsx`, `capabilities/default.json`)
+- Popup is now fullscreen on the active monitor (the one the main app window is on)
+- White popup card (~480px wide) is centered on a dark (`rgba(0,0,0,0.75)`) fullscreen background
+- Other monitors receive a `notification-overlay-N` window (dark fullscreen, no content)
+- Overlay windows block close (Alt+F4) until `notification-replacing` or `session-stopped` event
+- `close_notification_window` emits `notification-replacing` to all overlays before closing them
+- `get_monitors_split()` helper: uses `current_monitor()` on main window to find active monitor
+- `capabilities/default.json` adds `notification-overlay-*` glob for permissions
+
+**Current state:**
+- Items 1, 2, 3 committed and pushed — **NOT YET TESTED** (need to run dev-browser.bat + dev-tauri.bat)
+- Item 3 requires multi-monitor setup to test overlays properly
+
+**Next steps:**
+1. Test Items 1 + 2 in browser (`dev-browser.bat`) — see TODO.md checklist
+2. Test Item 3 in Tauri (`dev-tauri.bat`) — ideally on a multi-monitor setup
+3. Fix any bugs found
+4. Continue with Items 3b, 4, 5, 6 in order
+
+---
+
 ### Session 15 — 2026-03-04 (wmben PC — planning session, no code written)
 
 **What was done:**

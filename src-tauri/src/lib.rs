@@ -14,6 +14,64 @@ pub struct NotificationData {
 
 pub struct NotificationState(pub Mutex<Option<NotificationData>>);
 
+/// Returns (active_monitor, other_monitors) by finding which monitor the main window is on.
+/// Falls back to first monitor if detection fails.
+fn get_monitors_split(app: &AppHandle) -> (Option<tauri::Monitor>, Vec<tauri::Monitor>) {
+    let main_window = match app.get_webview_window("main") {
+        Some(w) => w,
+        None => return (None, vec![]),
+    };
+
+    let all = match main_window.available_monitors() {
+        Ok(monitors) => monitors,
+        Err(_) => return (None, vec![]),
+    };
+
+    if all.is_empty() {
+        return (None, vec![]);
+    }
+
+    // Find the monitor the main window is currently displayed on
+    let active_pos = main_window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|m| (m.position().x, m.position().y));
+
+    let mut monitors = all;
+    let active_idx = active_pos
+        .and_then(|(x, y)| {
+            monitors
+                .iter()
+                .position(|m| m.position().x == x && m.position().y == y)
+        })
+        .unwrap_or(0);
+
+    let active = monitors.remove(active_idx);
+    (Some(active), monitors)
+}
+
+/// Emit notification-replacing to all overlay windows, then close them.
+async fn close_overlay_windows(app: &AppHandle) {
+    let overlays: Vec<_> = (0..8u32)
+        .filter_map(|i| app.get_webview_window(&format!("notification-overlay-{}", i)))
+        .collect();
+
+    if overlays.is_empty() {
+        return;
+    }
+
+    // Signal overlays to allow close (they block close until this event)
+    for w in &overlays {
+        let _ = w.emit("notification-replacing", ());
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    for w in &overlays {
+        let _ = w.close();
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+}
+
 #[tauri::command]
 async fn show_notification(
     app: AppHandle,
@@ -39,15 +97,18 @@ async fn show_notification(
     // Emit "notification-replacing" first so the popup's onCloseRequested guard steps aside.
     if let Some(existing) = app.get_webview_window("notification") {
         let _ = existing.emit("notification-replacing", ());
-        // Small yield to let the JS event handler run before we send the close
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         let _ = existing.close();
-        // Wait for the window to actually be destroyed before creating a new one with the same label
         tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
 
-    // WebviewUrl::App only works for static builds; dev mode needs External with the full URL.
-    // Pass data via URL query params so the popup doesn't need IPC just to display content.
+    // Close any existing overlay windows from the previous notification
+    close_overlay_windows(&app).await;
+
+    // Find which monitor the main window is on; split remaining monitors for overlays
+    let (active_monitor, other_monitors) = get_monitors_split(&app);
+
+    // Build main popup URL (fullscreen on active monitor, card centered inside)
     #[cfg(debug_assertions)]
     let popup_url = {
         let mut u = url::Url::parse("http://localhost:3000/popup").map_err(|e| e.to_string())?;
@@ -65,16 +126,54 @@ async fn show_notification(
     #[cfg(not(debug_assertions))]
     let popup_url = WebviewUrl::App("popup/index.html".into());
 
-    WebviewWindowBuilder::new(&app, "notification", popup_url)
+    // Create main popup window — fullscreen on active monitor if known, else 480×320 centered
+    let popup_builder = WebviewWindowBuilder::new(&app, "notification", popup_url)
         .title("MindfulPrompter")
-        .inner_size(480.0, 320.0)
         .always_on_top(true)
-        .center()
         .resizable(false)
-        .decorations(false)  // No title bar — removes X button, minimize, and drag-to-move
-        .minimizable(false)
-        .build()
-        .map_err(|e| e.to_string())?;
+        .decorations(false)
+        .minimizable(false);
+
+    let popup_builder = match &active_monitor {
+        Some(m) => {
+            let size = m.size();
+            let pos = m.position();
+            popup_builder
+                .inner_size(size.width as f64, size.height as f64)
+                .position(pos.x as f64, pos.y as f64)
+        }
+        None => popup_builder.inner_size(480.0, 320.0).center(),
+    };
+
+    popup_builder.build().map_err(|e| e.to_string())?;
+
+    // Create dark overlay windows on every other monitor
+    for (i, monitor) in other_monitors.iter().enumerate() {
+        let label = format!("notification-overlay-{}", i);
+        let size = monitor.size();
+        let pos = monitor.position();
+
+        #[cfg(debug_assertions)]
+        let ov_url = {
+            let mut u =
+                url::Url::parse("http://localhost:3000/popup").map_err(|e| e.to_string())?;
+            u.query_pairs_mut().append_pair("overlay", "true");
+            WebviewUrl::External(u)
+        };
+        #[cfg(not(debug_assertions))]
+        let ov_url = WebviewUrl::App("popup/index.html".into()); // JS detects overlay via window label
+
+        let _ = WebviewWindowBuilder::new(&app, &label, ov_url)
+            .title("MindfulPrompter")
+            .inner_size(size.width as f64, size.height as f64)
+            .position(pos.x as f64, pos.y as f64)
+            .always_on_top(true)
+            .resizable(false)
+            .decorations(false)
+            .minimizable(false)
+            .build();
+    }
+
     Ok(())
 }
 
@@ -88,6 +187,7 @@ async fn close_notification_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("notification") {
         window.close().map_err(|e| e.to_string())?;
     }
+    close_overlay_windows(&app).await;
     Ok(())
 }
 

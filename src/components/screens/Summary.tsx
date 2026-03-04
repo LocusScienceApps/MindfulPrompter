@@ -33,12 +33,12 @@ export default function SettingsUpdated({
   const { mode } = s;
   const modeName = MODE_NAMES[mode] ?? mode;
 
+  const autoName = generatePresetName(s.mode, s);
+
   const [subView, setSubView] = useState<SubView>(null);
-  const [presetName, setPresetName] = useState('');
+  const [presetName, setPresetName] = useState(autoName);
   const [savedSlot, setSavedSlot] = useState<PresetSlot | null>(null);
   const [confirmOverwrite, setConfirmOverwrite] = useState<PresetSlot | null>(null);
-
-  const autoName = generatePresetName(s.mode, s);
   const presetSlots = (subView === 'preset-slots' || confirmOverwrite !== null) ? getPresetSlots(mode) : [];
 
   const handleSavePreset = (slot: PresetSlot) => {
@@ -121,9 +121,6 @@ export default function SettingsUpdated({
             placeholder={autoName}
             className="w-full rounded-lg border-2 border-gray-300 px-4 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <p className="mt-1 text-xs text-gray-400">
-            Leave blank to use the auto-generated name: &ldquo;{autoName}&rdquo;
-          </p>
         </div>
 
         <Button onClick={() => setSubView('preset-slots')} className="w-full">
@@ -301,7 +298,7 @@ export default function SettingsUpdated({
       <div className="flex flex-col gap-3">
         <Button
           onClick={() => {
-            setPresetName('');
+            setPresetName(autoName);
             setSavedSlot(null);
             setConfirmOverwrite(null);
             setSubView('preset-naming');

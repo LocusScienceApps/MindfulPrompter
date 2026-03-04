@@ -24,17 +24,27 @@ const EVENT_META: Record<string, { label: string; accent: string }> = {
 export default function PopupPage() {
   const [data, setData] = useState<NotificationData | null>(null);
   const [countdown, setCountdown] = useState(0);
+  const [isOverlay, setIsOverlay] = useState(false);
   // Refs so effects registered once can always read current values
   const countdownRef = useRef(0);
+  const isOverlayRef = useRef(false);
   // Set true when Rust emits "notification-replacing" so onCloseRequested lets the close through
   const replacingRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Overlay detection from URL param (dev mode)
+    if (params.get('overlay') === 'true') {
+      isOverlayRef.current = true;
+      setIsOverlay(true);
+      return;
+    }
+
     const eventType = params.get('eventType');
     if (eventType) {
+      // Load notification data from URL params (dev mode)
       const dismissSeconds = parseInt(params.get('dismissSeconds') ?? '5', 10);
-      // params.get returns null if absent (use default), '' if present-but-empty (no label)
       const rawLabel = params.get('popupLabel');
       setData({
         eventType,
@@ -46,13 +56,21 @@ export default function PopupPage() {
       });
       setCountdown(dismissSeconds);
     } else if (isTauri()) {
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke<NotificationData>('get_notification_data').then((result) => {
+      // In prod Tauri builds, check window label for overlay detection, otherwise load via invoke
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        if (getCurrentWindow().label.startsWith('notification-overlay-')) {
+          isOverlayRef.current = true;
+          setIsOverlay(true);
+          return;
+        }
+        return import('@tauri-apps/api/core').then(({ invoke }) =>
+          invoke<NotificationData>('get_notification_data')
+        ).then((result) => {
           if (result) {
             setData(result);
             setCountdown(result.dismissSeconds);
           }
-        }).catch(console.error);
+        });
       }).catch(console.error);
     }
   }, []);
@@ -90,13 +108,13 @@ export default function PopupPage() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // While countdown > 0: steal focus back whenever user clicks away, and block Alt+F4.
+  // While countdown > 0 (or overlay): steal focus back whenever user clicks away, and block Alt+F4.
   // Registered once on mount; reads refs so it doesn't need to re-register each second.
   useEffect(() => {
     if (!isTauri()) return;
 
     const handleBlur = async () => {
-      if (countdownRef.current <= 0 || replacingRef.current) return;
+      if ((countdownRef.current <= 0 && !isOverlayRef.current) || replacingRef.current) return;
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         await getCurrentWindow().setFocus();
@@ -104,12 +122,15 @@ export default function PopupPage() {
     };
     window.addEventListener('blur', handleBlur);
 
-    // Block user-initiated close (Alt+F4, taskbar) during countdown,
-    // but allow it when Rust is replacing or session has stopped.
+    // Block user-initiated close (Alt+F4, taskbar) during countdown or for overlay windows.
+    // Overlays are always blocked until "notification-replacing" or "session-stopped".
     let unlisten: (() => void) | undefined;
     import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
       getCurrentWindow().onCloseRequested((event) => {
-        if (countdownRef.current > 0 && !replacingRef.current) {
+        const shouldBlock = isOverlayRef.current
+          ? !replacingRef.current  // overlay: block until Rust signals replace/stop
+          : (countdownRef.current > 0 && !replacingRef.current); // popup: block during countdown
+        if (shouldBlock) {
           event.preventDefault();
         }
       }).then((fn) => { unlisten = fn; }).catch(console.error);
@@ -147,6 +168,11 @@ export default function PopupPage() {
     return () => document.removeEventListener('keydown', handler);
   }, [countdown, handleDismiss]);
 
+  // Overlay mode: just a dark background blocking the other monitor
+  if (isOverlay) {
+    return <div style={{ minHeight: '100vh', background: 'rgba(0,0,0,0.75)' }} />;
+  }
+
   if (!data) {
     return <div style={{ minHeight: '100vh', background: '#fff' }} />;
   }
@@ -161,52 +187,56 @@ export default function PopupPage() {
     : popupLabel; // '' means no label shown
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-white px-8 py-6 ring-1 ring-gray-200">
-      {/* Thin colored accent strip at top */}
-      <div className={`absolute left-0 right-0 top-0 h-1 ${meta.accent}`} />
+    // Dark fullscreen background covering the active monitor
+    <div className="flex min-h-screen flex-col items-center justify-center bg-black/75">
+      {/* Centered popup card — ~480px wide, same content as before */}
+      <div className="relative w-full max-w-[480px] overflow-hidden rounded-2xl bg-white px-8 py-6 shadow-2xl">
+        {/* Thin colored accent strip at top */}
+        <div className={`absolute left-0 right-0 top-0 h-1 ${meta.accent}`} />
 
-      {/* Event type label */}
-      {displayLabel && (
-        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
-          {displayLabel}
-        </p>
-      )}
+        {/* Event type label */}
+        {displayLabel && (
+          <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+            {displayLabel}
+          </p>
+        )}
 
-      {/* Prompt text */}
-      {hasPrompt && (
-        <p className="text-center text-xl font-semibold leading-snug text-gray-900">
-          {promptText}
-        </p>
-      )}
+        {/* Prompt text */}
+        {hasPrompt && (
+          <p className="text-center text-xl font-semibold leading-snug text-gray-900">
+            {promptText}
+          </p>
+        )}
 
-      {/* Context (title / body) */}
-      {hasContext && (
-        <div className={hasPrompt ? 'mt-4 border-t border-gray-100 pt-4 w-full' : 'w-full'}>
-          {title && (
-            <p className={`text-center text-gray-600 ${hasPrompt ? 'text-sm' : 'text-base font-medium'}`}>
-              {title}
-            </p>
-          )}
-          {body && (
-            <p className="mt-1 whitespace-pre-line text-center text-sm text-gray-500">
-              {body}
-            </p>
-          )}
-        </div>
-      )}
+        {/* Context (title / body) */}
+        {hasContext && (
+          <div className={hasPrompt ? 'mt-4 border-t border-gray-100 pt-4 w-full' : 'w-full'}>
+            {title && (
+              <p className={`text-center text-gray-600 ${hasPrompt ? 'text-sm' : 'text-base font-medium'}`}>
+                {title}
+              </p>
+            )}
+            {body && (
+              <p className="mt-1 whitespace-pre-line text-center text-sm text-gray-500">
+                {body}
+              </p>
+            )}
+          </div>
+        )}
 
-      {/* Dismiss button */}
-      <button
-        onClick={handleDismiss}
-        disabled={countdown > 0}
-        className={`mt-6 w-full rounded-xl py-3 text-base font-semibold transition-all ${
-          countdown > 0
-            ? 'cursor-not-allowed bg-gray-100 text-gray-400'
-            : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
-        }`}
-      >
-        {countdown > 0 ? `Wait (${countdown}s)…` : 'OK'}
-      </button>
+        {/* Dismiss button */}
+        <button
+          onClick={handleDismiss}
+          disabled={countdown > 0}
+          className={`mt-6 w-full rounded-xl py-3 text-base font-semibold transition-all ${
+            countdown > 0
+              ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+              : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
+          }`}
+        >
+          {countdown > 0 ? `Wait (${countdown}s)…` : 'OK'}
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — needs testing ⚠️
+## Status: Phase 2 (Tauri) in progress — needs testing + 6 features planned ⚠️
 
 The Tauri wrapper exists and the native popup is working (fixed in Sessions 10–11).
-Sessions 12–14 added significant improvements. **None have been tested on the new PC.**
+Sessions 12–14 added significant improvements. **None have been tested on this PC.**
+Session 15 was a planning session — 6 features designed, no code written.
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 No need to manually unregister the service worker — the batch files handle port cleanup automatically.
@@ -57,8 +58,54 @@ The other PC (wmben) may have session notes for Sessions 10–13 that were never
 When back on that PC, check Claude's memory files and any local SHARED.md edits.
 Merge those notes into this file and SHARED.md.
 
-### 5. After all tests pass → remaining Phase 2 work
-See SHARED.md Phase 2 section. Key items:
+---
+
+## After testing passes — Session 15 features (Items 1–6, implement in order)
+
+### Item 1 — Helper text standardization (`Customize.tsx`)
+- [ ] promptCount helper: dynamic — `"Default: 0 (= ∞) to run indefinitely."` or `"Default: N. Enter 0 (= ∞) to run indefinitely."`; remove sub-notes below field
+- [ ] sessionsPerSet helper: `"Default: N. Enter 0 (= ∞) to run indefinitely."`
+- [ ] numberOfSets helper: `"Default: 3. Enter 0 (= ∞) to run indefinitely."`
+
+### Item 2 — Preset name pre-filled (`Summary.tsx`)
+- [ ] Initialize `presetName` state to `autoName` (not `''`)
+- [ ] Remove helper text below name input field
+
+### Item 3 — True popup blocking (`lib.rs`, `popup/page.tsx`)
+- [ ] Popup becomes fullscreen on active monitor; inner card stays ~480px centered
+- [ ] Additional monitors get dark fullscreen `notification-overlay-N` windows
+- [ ] `close_notification_window` closes all overlay windows
+
+### Item 3b — Hard break option (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`, `popup/page.tsx`)
+- [ ] New `hardBreak: boolean` setting (P and B modes, default false)
+- [ ] Toggle in Customize > Break section with amber warning + confirmation
+- [ ] When enabled: break events get `isHardBreak: true` + `dismissSeconds = full break duration`
+- [ ] Popup shows break countdown; OK button disabled until 0; auto-dismisses
+
+### Item 4 — Mindfulness scope for Both mode (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`)
+- [ ] New `bothMindfulnessScope: 'prompts-only' | 'breaks' | 'work-starts' | 'all'` (default `'prompts-only'`)
+- [ ] A/B/C/D selector at bottom of Mindfulness section (Both mode only)
+- [ ] Scope B: add `promptText` + `dismissSeconds` to short_break, long_break, session_complete
+- [ ] Scope C: add `promptText` + `dismissSeconds` to non-first work_start events
+- [ ] Scope D: both B and C
+
+### Item 5 — Popup redesign (`types.ts`, `schedule.ts`, `lib.rs`, `Customize.tsx`, `DefaultsReview.tsx`, `Summary.tsx`, `popup/page.tsx`)
+- [ ] Remove all `popupLabel*` Settings fields + `resolveLabel()` + chip label rendering (Session 12/13 rollback)
+- [ ] Remove "Popup labels" subsection from DefaultsReview + Summary
+- [ ] Update title strings: long_break → "Set complete! Long break starting."; work_start (short break) → "Break over. Back to Work!"; work_start (long break/new set) → "Long break over. Time to start the next set!"; session_complete → "Session Complete! Great Work!"
+- [ ] Fix body: remove leading "Break over! " from work_start body text
+- [ ] M-mode session_complete: add `promptText + dismissSeconds` (final mindfulness moment)
+- [ ] P-mode session_complete: `dismissSeconds: 0`
+- [ ] Detect work_start context: `period1 > 1` = after short break; `period1 === 1 && set1 > 1` = after long break
+
+### Item 6 — Prompt counter in M-mode (`types.ts`, `schedule.ts`, `lib.rs`, `popup/page.tsx`)
+- [ ] Add `promptCountTotal?: number` to `TimerEvent`; set it in `computeMindfulnessOnlySchedule`
+- [ ] Pass as URL param from lib.rs
+- [ ] Popup renders "Prompt X of Y" (finite) or "Prompt X" (indefinite) below prompt text; M-mode only
+
+---
+
+## After Items 1–6 → remaining Phase 2 work
 - Settings storage: switch from localStorage → Tauri file system API (AppData)
 - Cowork feature: Firebase Realtime Database for shared session codes
 

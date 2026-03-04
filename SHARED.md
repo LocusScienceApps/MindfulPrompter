@@ -357,6 +357,53 @@ public/
 
 ---
 
+### Session 15 — 2026-03-04 (wmben PC — planning session, no code written)
+
+**What was done:**
+- Pulled Session 14 commits from the other PC (benw00)
+- Updated Claude memory files on this PC to reflect Sessions 14 changes
+- Planned the next 6 features in detail — design finalized, no code written yet
+
+**Planned features (Items 1–6) — implement in order after testing:**
+
+**Item 1 — Helper text standardization** (`Customize.tsx`)
+Three "run indefinitely" fields get consistent phrasing: `"Default: X. Enter 0 (= ∞) to run indefinitely."` (or `"Default: 0 (= ∞) to run indefinitely."` when default is already 0). Remove sub-notes below the promptCount field.
+
+**Item 2 — Preset name pre-filled** (`Summary.tsx`)
+Initialize `presetName` state to `autoName` instead of `''`. Remove helper text below name input. Keep placeholder for fallback when field is cleared.
+
+**Item 3 — True popup blocking** (`lib.rs`, `popup/page.tsx`)
+Make popup fullscreen on active monitor; create dark fullscreen overlay windows on all other monitors. All overlay windows close together. Popup card (480px) remains centered within the fullscreen background.
+
+**Item 3b — Hard break option** (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`, `popup/page.tsx`)
+New setting `hardBreak: boolean` (default false, P and B modes only). When enabled, break popup stays up for the FULL break duration — user cannot dismiss early. Enable confirmation: "Are you sure? You won't be able to use your computer until the break ends, even if you're in the middle of something important."
+
+**Item 4 — Mindfulness scope (Both mode)** (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`)
+New setting `bothMindfulnessScope: 'prompts-only' | 'breaks' | 'work-starts' | 'all'` (default: `'prompts-only'`). UI selector at bottom of Mindfulness section (Both mode only):
+- A: prompts-only at intervals (default)
+- B: + embedded in short_break, long_break, session_complete
+- C: + embedded in non-first work_start events
+- D: all
+
+**Item 5 — Popup redesign** (`types.ts`, `schedule.ts`, `lib.rs`, `Customize.tsx`, `DefaultsReview.tsx`, `Summary.tsx`, `popup/page.tsx`)
+- **Remove chip labels entirely** — delete all `popupLabel*` Settings fields, `resolveLabel()` from schedule.ts, label params from lib.rs, label rendering from popup/page.tsx, and the "Popup labels" subsection from DefaultsReview + Summary (Session 12/13 rollback)
+- **Updated title strings:** long_break → "Set complete! Long break starting."; work_start after short break → "Break over. Back to Work!"; work_start after long break → "Long break over. Time to start the next set!"; session_complete → "Session Complete! Great Work!"
+- **Body fix:** Remove redundant "Break over! " from start of work_start body text (it's now in the title)
+- **M-mode session_complete:** Add `promptText: s.promptText` + `dismissSeconds: s.dismissSeconds` — the session_complete popup IS the final mindfulness moment in M-mode
+- **P-mode session_complete:** `dismissSeconds: 0` — immediately closeable
+- **Both-mode session_complete:** promptText only when scope is B or D (handled by Item 4)
+- Detect work_start context: `period1 > 1` = after short break; `period1 === 1 && set1 > 1` = after long break
+
+**Item 6 — Prompt counter in M-mode** (`types.ts`, `schedule.ts`, `lib.rs`, `popup/page.tsx`)
+Add `promptCountTotal?: number` to `TimerEvent`. In M-mode mindfulness events, set `promptCountTotal: s.promptCount`. Popup renders "Prompt X of Y" (finite) or "Prompt X" (indefinite) below the prompt text. M-mode only — not shown in Both or P mode.
+
+**Next steps for AI (start here next session):**
+1. Test everything (see TODO.md checklist) — Sessions 10–14 are untested on this PC
+2. After tests pass: implement Items 1–6 in order
+3. After Items 1–6: proceed to remaining Phase 2 (settings storage → Tauri file API)
+
+---
+
 ### ⚠️ DOCUMENTATION GAP — Sessions 10–13 (2026-03-02, other PC)
 
 **Commits exist but were never documented in SHARED.md:**

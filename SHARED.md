@@ -367,6 +367,36 @@ public/
 
 ---
 
+### Session 18 — 2026-03-04 (wmben PC — settings bug fixes in Customize.tsx)
+
+**What was done:**
+
+**Settings bug fixes** (`Customize.tsx`) ✅ TESTED by user — all working
+
+Root cause: `Customize.tsx` was using `initial` (the loaded settings/preset) for all "Default: X" helper text and `NumericInput.defaultValue`. When a preset is loaded, `initial` IS the preset — not the mode defaults — so helpers showed preset values as if they were defaults.
+
+Fix: added `modeDefaults = { ...getDefaults(mode), ...getDefaultsForMode(mode) }` and replaced all affected `initial.X` references with `modeDefaults.X`.
+
+Specific fixes:
+- "Work period length" helper: was showing preset value (e.g. 0.5 min) as Default; now shows 25 min ✓
+- "Work period length" NumericInput: preset value now shows as BLACK text (not gray placeholder) ✓
+- "Work periods per set" helper and defaultValue: same fix (was showing preset value as Default) ✓
+- "Dismiss delay" helper and defaultValue: was showing preset value (e.g. 5s) as Default; now shows 15s ✓
+- "Prompt frequency" (M-mode) helper and defaultValue: same fix ✓
+- "Number of prompts" helper and defaultValue: same fix ✓
+- Mindfulness prompt textarea: `placeholder` and `|| fallback` now use `modeDefaults.promptText` (factory default "Are you doing..."); clearing the textarea now correctly shows the factory default prompt as gray hint, not the preset text ✓
+- `NumericInput` ∞ display: when `allowZero=true` and `value=0` but `defaultValue≠0` (preset chose ∞ over a real default), now shows solid black ∞ rather than gray placeholder ∞. Achieved by using `type="text"` for allowZero inputs and initializing `rawInput='∞'` in that case.
+
+**Current state:**
+- All changes committed
+- TypeScript clean
+- Tested by user — all working
+
+**Next steps:**
+1. Continue with revised Items 4+5 (see TODO.md for updated plan)
+
+---
+
 ### Session 17 — 2026-03-04 (wmben PC — UX polish: mode rename, preset indicator, post-save layout, home button)
 
 **What was done:**

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Settings } from '@/lib/types';
 import {
+  getDefaults,
   defaultBreakMinutes,
   defaultLongBreakMinutes,
   defaultPromptInterval,
@@ -35,6 +36,11 @@ export default function Customize({
   const [showHardBreakConfirm, setShowHardBreakConfirm] = useState(false);
 
   const { mode } = s;
+
+  // The true defaults for this mode (user's saved overrides merged on top of factory).
+  // Used for helper text ("Default: X") and NumericInput placeholder/reset values.
+  // Must NOT use `initial` here — initial may be a loaded preset, not the mode defaults.
+  const modeDefaults = { ...getDefaults(mode), ...getDefaultsForMode(mode) } as Settings;
 
   const update = (partial: Partial<Settings>) => {
     setS((prev) => ({ ...prev, ...partial }));
@@ -144,11 +150,11 @@ export default function Customize({
         <Section title="Pomodoro Settings">
           <SettingField
             label="Work period length"
-            helper={`Default: ${formatNum(initial.workMinutes)} minutes`}
+            helper={`Default: ${formatNum(modeDefaults.workMinutes)} minutes`}
           >
             <NumericInput
               value={s.workMinutes}
-              defaultValue={initial.workMinutes}
+              defaultValue={modeDefaults.workMinutes}
               unit="minutes"
               onChange={(v) =>
                 update({
@@ -226,11 +232,11 @@ export default function Customize({
 
           <SettingField
             label='Work periods per set'
-            helper={`Default: ${initial.sessionsPerSet}. Enter 0 (= ∞) to run indefinitely.`}
+            helper={`Default: ${modeDefaults.sessionsPerSet}. Enter 0 (= ∞) to run indefinitely.`}
           >
             <NumericInput
               value={s.sessionsPerSet}
-              defaultValue={initial.sessionsPerSet}
+              defaultValue={modeDefaults.sessionsPerSet}
               unit="periods"
               integerOnly
               allowZero
@@ -286,15 +292,15 @@ export default function Customize({
         <Section title="Mindfulness Prompt Settings">
           <SettingField
             label="Mindfulness prompt"
-            helper='Default: "Are you doing what you should be doing?"'
+            helper={`Default: "${modeDefaults.promptText}"`}
           >
             <textarea
               value={promptRaw}
               onChange={(e) => {
                 setPromptRaw(e.target.value);
-                update({ promptText: e.target.value || initial.promptText });
+                update({ promptText: e.target.value || modeDefaults.promptText });
               }}
-              placeholder={initial.promptText}
+              placeholder={modeDefaults.promptText}
               rows={3}
               className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
@@ -305,12 +311,12 @@ export default function Customize({
             helper={
               mode === 'both'
                 ? `Must fit evenly into your ${formatNum(s.workMinutes)}-minute work period. Default: ${formatNum(derivedInterval)} minutes.`
-                : `Must divide evenly into 60 minutes. Default: ${formatNum(initial.promptIntervalMinutes)} minutes.`
+                : `Must divide evenly into 60 minutes. Default: ${formatNum(modeDefaults.promptIntervalMinutes)} minutes.`
             }
           >
             <NumericInput
               value={s.promptIntervalMinutes}
-              defaultValue={mode === 'both' ? derivedInterval : initial.promptIntervalMinutes}
+              defaultValue={mode === 'both' ? derivedInterval : modeDefaults.promptIntervalMinutes}
               unit="minutes"
               onChange={(v) => {
                 update({ promptIntervalMinutes: v });
@@ -322,11 +328,11 @@ export default function Customize({
 
           <SettingField
             label="Dismiss delay"
-            helper={`How long the prompt stays on screen before you can dismiss it. Default: ${initial.dismissSeconds} seconds.`}
+            helper={`How long the prompt stays on screen before you can dismiss it. Default: ${modeDefaults.dismissSeconds} seconds.`}
           >
             <NumericInput
               value={s.dismissSeconds}
-              defaultValue={initial.dismissSeconds}
+              defaultValue={modeDefaults.dismissSeconds}
               unit="seconds"
               integerOnly
               onChange={(v) => update({ dismissSeconds: v })}
@@ -336,11 +342,11 @@ export default function Customize({
           {mode === 'mindfulness' && (
             <SettingField
               label="Number of prompts"
-              helper={initial.promptCount === 0 ? 'Default: 0 (= ∞) to run indefinitely.' : `Default: ${initial.promptCount}. Enter 0 (= ∞) to run indefinitely.`}
+              helper={modeDefaults.promptCount === 0 ? 'Default: 0 (= ∞) to run indefinitely.' : `Default: ${modeDefaults.promptCount}. Enter 0 (= ∞) to run indefinitely.`}
             >
               <NumericInput
                 value={s.promptCount}
-                defaultValue={initial.promptCount}
+                defaultValue={modeDefaults.promptCount}
                 unit="prompts"
                 integerOnly
                 allowZero
@@ -550,8 +556,11 @@ function NumericInput({
   allowZero?: boolean;
   onChange: (v: number) => void;
 }) {
+  // When allowZero=true and value=0:
+  //   - If 0 IS the default (∞ is the "normal" state) → show as gray ∞ placeholder
+  //   - If 0 is NOT the default (user chose ∞ over a real default) → show as solid ∞ text
   const [rawInput, setRawInput] = useState(() => {
-    if (allowZero && value === 0) return ''; // show ∞ placeholder
+    if (allowZero && value === 0) return defaultValue === 0 ? '' : '∞';
     if (value === defaultValue) return '';   // matches default → show as gray placeholder
     return String(value);                    // custom value → show as black filled text
   });
@@ -563,22 +572,32 @@ function NumericInput({
       onChange(defaultValue);
       return;
     }
+    if (raw === '∞') return; // already representing 0; no state change needed
     const parsed = integerOnly ? parseInt(raw, 10) : parseFloat(raw);
     if (!isNaN(parsed) && (allowZero ? parsed >= 0 : parsed > 0)) {
       onChange(parsed);
-      if (parsed === 0 && allowZero) setRawInput('');
+      // When user types 0, display as solid ∞ (if default≠0) or gray ∞ placeholder (if default=0)
+      if (parsed === 0 && allowZero) setRawInput(defaultValue === 0 ? '' : '∞');
     }
   };
+
+  // For allowZero inputs we use type="text" so we can display the ∞ character as actual text.
+  // Manual parsing/validation is already in handleChange so type="number" spinners aren't needed.
+  const inputType = allowZero ? 'text' : 'number';
+  const placeholderText = allowZero && defaultValue === 0 ? '∞' : formatNum(defaultValue);
 
   return (
     <div className="flex items-center gap-3">
       <input
-        type="number"
+        type={inputType}
+        inputMode={allowZero ? 'numeric' : undefined}
         value={rawInput}
-        placeholder={allowZero && (defaultValue === 0 || value === 0) ? '∞' : formatNum(defaultValue)}
+        placeholder={placeholderText}
         onChange={handleChange}
-        min={allowZero ? 0 : integerOnly ? 1 : 0.5}
-        step={integerOnly ? 1 : 0.5}
+        {...(!allowZero && {
+          min: integerOnly ? 1 : 0.5,
+          step: integerOnly ? 1 : 0.5,
+        })}
         className="w-28 rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
       <span className="text-sm text-gray-500">{unit}</span>

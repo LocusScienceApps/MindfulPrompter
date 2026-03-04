@@ -30,7 +30,6 @@ export default function DefaultsReview({
   onBack,
 }: DefaultsReviewProps) {
   const { mode } = settings;
-  const [showPresets, setShowPresets] = useState(false);
   const [presets, setPresets] = useState(() => listPresetsForMode(mode));
   const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -55,7 +54,6 @@ export default function DefaultsReview({
     const preset = presets.find((p) => p.slot === slot);
     if (preset) {
       onLoadPreset(preset.preset.settings);
-      setShowPresets(false);
     }
   };
 
@@ -110,7 +108,8 @@ export default function DefaultsReview({
             <>
               <SettingRow label="Work periods" value={`${formatNum(settings.workMinutes)} minutes`} />
               <SettingRow label="Breaks" value={`${formatNum(settings.breakMinutes)} minutes`} />
-              <SettingRow label="Periods per set" value={String(settings.sessionsPerSet)} />
+              {settings.hardBreak && <SettingRow label="Lock screen during breaks" value="Yes" />}
+              <SettingRow label="Periods per set" value={settings.sessionsPerSet === 0 ? '∞ (unlimited)' : String(settings.sessionsPerSet)} />
               {settings.multipleSets && (
                 <>
                   <SettingRow label="Long break" value={`${formatNum(settings.longBreakMinutes)} minutes`} />
@@ -170,87 +169,73 @@ export default function DefaultsReview({
         </dl>
       </div>
 
-      {/* Preset list */}
-      {showPresets && (
+      {/* Preset list — always visible when presets exist */}
+      {presets.length > 0 && (
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
           <p className="mb-3 text-sm font-semibold text-indigo-700">Saved presets</p>
-          {presets.length === 0 ? (
-            <p className="text-sm text-gray-500">No presets saved for this mode yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {presets.map(({ slot, preset }) => (
-                <div
-                  key={slot}
-                  className="rounded-lg border border-indigo-200 bg-white px-3 py-2"
-                >
-                  {renamingSlot === slot ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveRename(slot);
-                          if (e.key === 'Escape') setRenamingSlot(null);
-                        }}
-                        autoFocus
-                        className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                      />
-                      <button
-                        onClick={() => handleSaveRename(slot)}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setRenamingSlot(null)}
-                        className="text-xs text-gray-400 hover:text-gray-600"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleLoad(slot)}
-                        className="flex-1 text-left text-sm"
-                      >
-                        <span className="font-medium text-gray-700">{slot}</span>
-                        <span className="mx-2 text-gray-400">&mdash;</span>
-                        <span className="text-gray-600">{preset.name}</span>
-                      </button>
-                      <button
-                        onClick={() => handleStartRename(slot, preset.name)}
-                        className="text-xs text-gray-400 hover:text-indigo-600"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        onClick={() => handleDelete(slot)}
-                        className={`text-xs font-medium ${
-                          confirmDeleteSlot === slot
-                            ? 'text-red-600 hover:text-red-800'
-                            : 'text-gray-400 hover:text-red-500'
-                        }`}
-                      >
-                        {confirmDeleteSlot === slot ? 'Confirm?' : 'Delete'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={() => {
-              setShowPresets(false);
-              setRenamingSlot(null);
-              setConfirmDeleteSlot(null);
-            }}
-            className="mt-3 text-sm text-indigo-600 hover:text-indigo-800"
-          >
-            Close
-          </button>
+          <div className="space-y-2">
+            {presets.map(({ slot, preset }) => (
+              <div
+                key={slot}
+                className="rounded-lg border border-indigo-200 bg-white px-3 py-2"
+              >
+                {renamingSlot === slot ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRename(slot);
+                        if (e.key === 'Escape') setRenamingSlot(null);
+                      }}
+                      autoFocus
+                      className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleSaveRename(slot)}
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setRenamingSlot(null)}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleLoad(slot)}
+                      className="flex-1 text-left text-sm"
+                    >
+                      <span className="font-medium text-gray-700">{slot}</span>
+                      <span className="mx-2 text-gray-400">&mdash;</span>
+                      <span className="text-gray-600">{preset.name}</span>
+                    </button>
+                    <button
+                      onClick={() => handleStartRename(slot, preset.name)}
+                      className="text-xs text-gray-400 hover:text-indigo-600"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      onClick={() => handleDelete(slot)}
+                      className={`text-xs font-medium ${
+                        confirmDeleteSlot === slot
+                          ? 'text-red-600 hover:text-red-800'
+                          : 'text-gray-400 hover:text-red-500'
+                      }`}
+                    >
+                      {confirmDeleteSlot === slot ? 'Confirm?' : 'Delete'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -264,15 +249,6 @@ export default function DefaultsReview({
         <Button onClick={onCustomize} variant="secondary" className="w-full">
           Change Settings
         </Button>
-        {presets.length > 0 && !showPresets && (
-          <Button
-            onClick={() => setShowPresets(true)}
-            variant="secondary"
-            className="w-full"
-          >
-            Load Preset
-          </Button>
-        )}
       </div>
     </div>
   );

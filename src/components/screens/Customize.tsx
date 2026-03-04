@@ -31,7 +31,7 @@ export default function Customize({
   const [intervalError, setIntervalError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const [promptRaw, setPromptRaw] = useState('');
+  const [promptRaw, setPromptRaw] = useState(initial.promptText);
   const [showHardBreakConfirm, setShowHardBreakConfirm] = useState(false);
 
   const { mode } = s;
@@ -550,7 +550,11 @@ function NumericInput({
   allowZero?: boolean;
   onChange: (v: number) => void;
 }) {
-  const [rawInput, setRawInput] = useState('');
+  const [rawInput, setRawInput] = useState(() => {
+    if (allowZero && value === 0) return ''; // show ∞ placeholder
+    if (value === defaultValue) return '';   // matches default → show as gray placeholder
+    return String(value);                    // custom value → show as black filled text
+  });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;

@@ -1,11 +1,10 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — Items 1–3 coded, need testing ⚠️
+## Status: Phase 2 (Tauri) in progress — Items 1–3b coded and tested ✅; Items 4–6 next
 
 The Tauri wrapper exists and the native popup is working (fixed in Sessions 10–11).
-Sessions 12–15 added significant improvements.
-Session 15 was a planning session — 6 features designed, no code written.
-Session 16: Phase 0 testing completed on this PC. Items 1, 2, 3 coded (not yet tested).
+Session 16: Items 1, 2, 3, 3b implemented and tested. 7 UX bugs found and fixed (same session).
+Bug fixes committed. Next: test fixes in browser, then proceed to Items 4, 5, 6.
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 No need to manually unregister the service worker — the batch files handle port cleanup automatically.
@@ -15,67 +14,39 @@ No need to manually unregister the service worker — the batch files handle por
 ## Immediate next steps (in order)
 
 ### 1. ✅ Test everything in browser first (`dev-browser.bat`) — DONE Session 16
-
-**Pomodoro mode — timer screen:**
-- [ ] Multiple sets: ring shows "Set 2, Period 3", detail line shows "out of 4 *5-period* sets"
-- [ ] Single set: ring shows "Period 3 of 4", no detail line
-- [ ] Unlimited periods (sessionsPerSet=0): ring shows "Period 3", no detail line
-- [ ] Unlimited sets (numberOfSets=0): ring shows "Set 2, Period 3", no detail line
-
-**Pomodoro mode — popup text:**
-- [ ] Short break popup: title "Break!", body "Set 2, Period 3 complete. Take a 5-minute break."
-- [ ] Long break popup: title "Break!", body "Set 3 complete. Take a 15-minute break."
-- [ ] Back-to-work popup: title "Break over!", body "Break over! Set 3, Period 2 starting (of 4 sets)"
-- [ ] Single set back-to-work: body "Break over! Period 2 starting" (no set info)
-- [ ] Session complete popup: body "3 sets × 4 periods × 25 min = 5h"
-
-**Settings — multiple sets toggle:**
-- [ ] Toggling "Yes, multiple sets" shows Number of Sets field with default 3 (not 1)
-
-**Mindfulness mode:**
-- [ ] No set/period info shown on timer screen (not applicable)
-- [ ] Prompts fire at correct intervals
-- [ ] promptCount=0 runs indefinitely; promptCount=N stops after N prompts
-
-**Both Together mode:**
-- [ ] Period numbering works alongside mindfulness prompts
-
-**Settings flow:**
-- [ ] Preset save/load round-trip (all three modes)
-- [ ] "No changes — Start Session" goes directly to timer
-- [ ] "Save as Default" confirmation + mode page updates
-- [ ] Reset to original defaults works
-
 ### 2. ✅ Test Tauri app (`dev-tauri.bat`) — DONE Session 16
-- [x] App launches without error
-- [x] Native popup appears and works
-- [x] Popup text formats correct
-- [x] Dismiss works
-
-### 3. ✅ Fix any bugs found — none found in Phase 0
-
+### 3. ✅ Fix any bugs found — none in Phase 0
 ### 4. ✅ Integrate notes from other PC — done
+### 5. ✅ Items 1, 2, 3 coded and tested — DONE Session 16
+### 6. ✅ Item 3b coded and tested — DONE Session 16
+### 7. ✅ 7 UX bugs found and fixed — DONE Session 16
 
-### 5. Test Items 1, 2, 3 (coded in Session 16, NOT YET TESTED)
+### 8. Test bug fixes in browser (`dev-browser.bat`)
 
-**Test Item 1 — Helper text (browser only):**
-- [ ] Customize.tsx: sessionsPerSet helper reads "Default: N. Enter 0 (= ∞) to run indefinitely." — no sub-note
-- [ ] Customize.tsx: numberOfSets helper reads "Default: 3. Enter 0 (= ∞) to run indefinitely." — no sub-note
-- [ ] Customize.tsx: promptCount helper reads "Default: 0 (= ∞) to run indefinitely." or "Default: N. Enter 0 (= ∞)…" — no sub-notes
+**NumericInput fix:**
+- [ ] Go to Change Settings → change a value (e.g. work period to 30 min) → Review Changes → Back → values show as BLACK text, not gray placeholder
+- [ ] Load a preset → Change Settings → all changed fields show as black text
+- [ ] Break length and long break length: if changed from derived default, show as black text when returning
 
-**Test Item 2 — Preset name pre-filled (browser only):**
-- [ ] Summary.tsx: preset name field is pre-filled with the auto-generated name (not blank)
-- [ ] Placeholder still shows the auto name when field is cleared
-- [ ] "Leave blank to use auto-generated name" helper text is GONE
+**promptRaw fix:**
+- [ ] Mindfulness prompt textarea: always shows current prompt as black text (not gray)
+- [ ] Clearing the textarea shows the current prompt as gray placeholder (fallback)
 
-**Test Item 3 — True popup blocking (Tauri only, `dev-tauri.bat`):**
-- [ ] Popup is fullscreen on the active monitor (where the main app window is)
-- [ ] Content (white card) is centered within the fullscreen dark background
-- [ ] On a multi-monitor setup: other monitors get a dark `notification-overlay-N` window
-- [ ] Dismissing the popup closes all overlay windows too
-- [ ] Overlay windows block Alt+F4 (can't be closed until popup is dismissed)
-- [ ] Single-monitor: popup is fullscreen, no overlay windows created
-- [ ] Popup replacement (new notification while one is open) closes old overlays + creates new ones
+**hardBreak display:**
+- [ ] Settings Updated (Summary): "Lock screen during breaks: Yes" row appears when hardBreak enabled
+- [ ] Mode landing page (DefaultsReview): same row appears when hardBreak is the default
+
+**Preset UX:**
+- [ ] After saving a preset in Summary: "Save as Preset" and "Save as Default" buttons disappear
+- [ ] Start Session button still shows after saving a preset
+
+**Always-visible presets:**
+- [ ] Mode landing page: saved presets always visible inline (no "Load Preset" button needed)
+- [ ] Clicking a preset row loads it and updates the displayed settings immediately
+- [ ] Rename and Delete still work
+
+**Periods per set ∞:**
+- [ ] Mode landing page: sessionsPerSet=0 shows "∞ (unlimited)" not "0"
 
 ---
 
@@ -98,7 +69,7 @@ No need to manually unregister the service worker — the batch files handle por
 - [x] `close_notification_window` closes all overlay windows (emits `notification-replacing` first)
 - [x] `capabilities/default.json` adds `notification-overlay-*` glob
 
-### Item 3b — Hard break option ✅ CODED (Session 16, not yet tested)
+### Item 3b — Hard break option ✅ CODED + TESTED (Session 16)
 - [x] `hardBreak?: boolean` in Settings; `dismissSeconds?` + `autoClose?` on TimerEvent
 - [x] defaults.ts: hardBreak: false in P and B factory defaults
 - [x] schedule.ts: break events get `dismissSeconds: breakSec/longBreakSec, autoClose: true` when hardBreak
@@ -107,10 +78,6 @@ No need to manually unregister the service worker — the batch files handle por
 - [x] NotificationOverlay.tsx: `autoClose` prop; auto-calls onDismiss when countdown hits 0
 - [x] popup/page.tsx: parses `autoClose` URL param; `handleDismissRef` auto-fires when countdown hits 0
 - [x] lib.rs: `auto_close: bool` in NotificationData + URL param; tauri.ts passes it through
-
-**To test:**
-- [ ] Browser: enable hard breaks → P-mode → break fires with full-duration countdown, OK disabled, auto-dismisses
-- [ ] Tauri: same test in native popup
 
 ### Item 4 — Mindfulness scope for Both mode (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`)
 - [ ] New `bothMindfulnessScope: 'prompts-only' | 'breaks' | 'work-starts' | 'all'` (default `'prompts-only'`)

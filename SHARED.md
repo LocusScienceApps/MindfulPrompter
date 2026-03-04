@@ -357,41 +357,43 @@ public/
 
 ---
 
-### Session 16 — 2026-03-04 (wmben PC — Phase 0 testing + Items 1, 2, 3 coded)
+### Session 16 — 2026-03-04 (wmben PC — Phase 0 testing + Items 1, 2, 3, 3b coded + bug fixes)
 
 **What was done:**
 - Phase 0 testing passed (browser + Tauri) — all Sessions 10–14 features verified working
-- Implemented Items 1, 2, 3 from the Session 15 plan
+- Implemented Items 1, 2, 3, and 3b from the Session 15 plan
+- Tested Item 3b in Both Together mode; found and fixed 7 UX bugs
 
-**Item 1 — Helper text standardization** (`Customize.tsx`)
-- All three "run indefinitely" fields now use `"Default: N. Enter 0 (= ∞) to run indefinitely."` phrasing
-- Removed sub-note paragraphs below each field (the helper text is now self-contained)
-- promptCount: dynamic — "Default: 0 (= ∞)..." when default is 0, "Default: N. Enter 0 (= ∞)..." when N
+**Item 1 — Helper text standardization** (`Customize.tsx`) ✅ TESTED
+**Item 2 — Preset name pre-filled** (`Summary.tsx`) ✅ TESTED
+**Item 3 — True popup blocking** (`lib.rs`, `popup/page.tsx`, `capabilities/default.json`) ✅ TESTED
 
-**Item 2 — Preset name pre-filled** (`Summary.tsx`)
-- `presetName` state now initializes to `autoName` instead of `''`
-- Removed "Leave blank to use auto-generated name" helper text
-- `setPresetName(autoName)` when user re-opens the save flow (not `setPresetName('')`)
-- Placeholder still shows `autoName` when field is cleared
+**Item 3b — Hard break option** (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`, `Timer.tsx`, `NotificationOverlay.tsx`, `popup/page.tsx`, `lib.rs`, `tauri.ts`)
+- `hardBreak?: boolean` in Settings; `dismissSeconds?` + `autoClose?` on TimerEvent
+- Break events get `dismissSeconds: breakSec/longBreakSec, autoClose: true` when `s.hardBreak === true`
+- "Lock screen during breaks" toggle in Customize with amber confirmation dialog on enable
+- Timer.tsx: uses `event.dismissSeconds ?? settings.dismissSeconds`; passes `event.autoClose`
+- Browser overlay and Tauri popup both auto-dismiss after countdown hits 0
+- `auto_close: bool` added to Rust `NotificationData` and URL params
 
-**Item 3 — True popup blocking** (`lib.rs`, `popup/page.tsx`, `capabilities/default.json`)
-- Popup is now fullscreen on the active monitor (the one the main app window is on)
-- White popup card (~480px wide) is centered on a dark (`rgba(0,0,0,0.75)`) fullscreen background
-- Other monitors receive a `notification-overlay-N` window (dark fullscreen, no content)
-- Overlay windows block close (Alt+F4) until `notification-replacing` or `session-stopped` event
-- `close_notification_window` emits `notification-replacing` to all overlays before closing them
-- `get_monitors_split()` helper: uses `current_monitor()` on main window to find active monitor
-- `capabilities/default.json` adds `notification-overlay-*` glob for permissions
+**Bug fixes (same session, after Item 3b testing):**
+1. **hardBreak display** (`Summary.tsx`, `DefaultsReview.tsx`): "Lock screen during breaks: Yes" now shown in settings summaries when enabled
+2. **NumericInput values as gray placeholder** (`Customize.tsx`): NumericInput now initializes `rawInput` to `String(value)` when `value !== defaultValue` — previously always showed as gray placeholder even when a custom value was set; this broke the "back to settings" and "load preset" flows
+3. **promptRaw initialization** (`Customize.tsx`): textarea now initializes to `initial.promptText` (black text) instead of `''` (gray placeholder)
+4. **Preset saved → hide save buttons** (`Summary.tsx`): "Save as Preset" and "Save as Default" buttons now hide once a preset has been saved in the current session
+5. **Preset name 3-diff limit** (`defaults.ts`): intentional — auto-name shows first 3 differences only to keep names readable
+6. **Always-visible presets** (`DefaultsReview.tsx`): saved presets now always shown inline on the mode landing page — no "Load Preset" tap needed; removed `showPresets` toggle and "Load Preset" button
+7. **Periods per set display** (`DefaultsReview.tsx`): now shows "∞ (unlimited)" when `sessionsPerSet === 0`, matching Summary.tsx
 
 **Current state:**
-- Items 1, 2, 3 committed and pushed — **NOT YET TESTED** (need to run dev-browser.bat + dev-tauri.bat)
-- Item 3 requires multi-monitor setup to test overlays properly
+- Items 1–3b + 7 bug fixes committed and pushed
+- Items 1 + 2 tested ✅, Items 3 + 3b partially tested ✅ — multi-monitor overlay untested
+- TypeScript passes clean (`npx tsc --noEmit`)
 
 **Next steps:**
-1. Test Items 1 + 2 in browser (`dev-browser.bat`) — see TODO.md checklist
-2. Test Item 3 in Tauri (`dev-tauri.bat`) — ideally on a multi-monitor setup
-3. Fix any bugs found
-4. Continue with Items 3b, 4, 5, 6 in order
+1. Test the 7 bug fixes in browser (`dev-browser.bat`)
+2. Continue with Items 4, 5, 6 in order
+3. After Items 4–6: proceed to remaining Phase 2 (settings storage → Tauri file API)
 
 ---
 

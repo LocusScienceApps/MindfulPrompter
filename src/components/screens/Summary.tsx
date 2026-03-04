@@ -203,6 +203,7 @@ export default function SettingsUpdated({
             <>
               <SettingRow label="Work periods" value={`${formatNum(s.workMinutes)} minutes`} />
               <SettingRow label="Breaks" value={`${formatNum(s.breakMinutes)} minutes`} />
+              {s.hardBreak && <SettingRow label="Lock screen during breaks" value="Yes" />}
               <SettingRow label="Periods per set" value={s.sessionsPerSet === 0 ? '∞ (unlimited)' : String(s.sessionsPerSet)} />
               {s.multipleSets && (
                 <>
@@ -296,20 +297,22 @@ export default function SettingsUpdated({
       )}
 
       <div className="flex flex-col gap-3">
-        <Button
-          onClick={() => {
-            setPresetName(autoName);
-            setSavedSlot(null);
-            setConfirmOverwrite(null);
-            setSubView('preset-naming');
-          }}
-          variant="secondary"
-          className="w-full"
-        >
-          Save as a Preset
-        </Button>
+        {!savedSlot && (
+          <Button
+            onClick={() => {
+              setPresetName(autoName);
+              setSavedSlot(null);
+              setConfirmOverwrite(null);
+              setSubView('preset-naming');
+            }}
+            variant="secondary"
+            className="w-full"
+          >
+            Save as a Preset
+          </Button>
+        )}
 
-        {subView !== 'save-default-confirm' && (
+        {!savedSlot && subView !== 'save-default-confirm' && (
           <Button
             onClick={() => setSubView('save-default-confirm')}
             variant="secondary"

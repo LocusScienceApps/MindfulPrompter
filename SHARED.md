@@ -139,11 +139,21 @@ public/
 
 ## Important Gotchas
 - **React strict mode (dev only):** Double-mounts components. Timer uses `startTimeRef` to preserve start time across re-mounts. Don't use `initializedRef` guards — they prevent worker re-creation after cleanup.
+- **React setState-in-render:** Never call a parent state setter inside a child's `setState` updater function. Call it in a `useEffect` or event handler instead.
 - **JavaScript falsy 0:** Use `settings.dismissSeconds` not `settings.dismissSeconds || 5` — `||` converts valid `0` to `5`.
 - **Web apps can't force windows to front:** This is WHY we need Tauri. Do not try to solve this with browser APIs.
 - **Audio autoplay:** AudioContext must be initialized from a user gesture (e.g., "Begin Session" click).
 - **Static export:** `output: 'export'` in next.config.ts — required for Tauri compatibility. No API routes, no server components that fetch data.
-- **localStorage vs AppData:** Use localStorage during web-only dev phase. Switch to Tauri file API in Phase 2. Design storage code to make this swap easy.
+- **localStorage vs AppData:** Use localStorage during web-only dev phase. Switch to Tauri file API in Phase 2. Design storage code to make this swap easy. Current localStorage key: `mindful-prompter-v2`.
+- **CRITICAL — Tauri async commands:** Any command that creates or closes a `WebviewWindow` MUST be `async fn`. Synchronous commands deadlock WebView2 on Windows (wry #583).
+- **CRITICAL — isTauri() guards:** Any `@tauri-apps/api` call in a page that can also load in a browser MUST be guarded with `isTauri()`. WebView2 treats unhandled promise rejections as fatal (unlike Chrome), blanking the page. Use `import { isTauri } from '@/lib/tauri'`.
+
+### Tauri Key Files
+- `src-tauri/src/lib.rs` — `show_notification` (async), `get_notification_data`, `close_notification_window` (async)
+- `src-tauri/capabilities/default.json` — windows allowlist: `["main", "notification", "notification-overlay-*"]`
+- `src/app/popup/page.tsx` — popup UI: dark fullscreen bg, centered white card, handles overlay mode
+- `src/lib/tauri.ts` — `isTauri()`, `showNotificationWindow()`, `onNotificationDismissed()`
+- `src/components/screens/Timer.tsx` — calls Tauri or overlay depending on environment
 
 ---
 

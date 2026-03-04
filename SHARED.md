@@ -393,7 +393,7 @@ Specific fixes:
 - Tested by user — all working
 
 **Next steps:**
-1. Continue with revised Items 4+5 (see TODO.md for updated plan)
+1. Continue with Items 4, 5, 6 in order (see TODO.md)
 
 ---
 

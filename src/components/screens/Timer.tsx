@@ -251,8 +251,9 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
               event.title,
               event.body,
               event.promptText,
-              settingsRef.current.dismissSeconds,
+              event.dismissSeconds ?? settingsRef.current.dismissSeconds,
               event.popupLabel,
+              event.autoClose,
             ).catch(console.error);
           } else {
             setShowOverlay(true);
@@ -406,7 +407,8 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
       {showOverlay && currentEvent && (
         <NotificationOverlay
           event={currentEvent}
-          dismissSeconds={settings.dismissSeconds}
+          dismissSeconds={currentEvent.dismissSeconds ?? settings.dismissSeconds}
+          autoClose={currentEvent.autoClose}
           onDismiss={handleDismissOverlay}
         />
       )}

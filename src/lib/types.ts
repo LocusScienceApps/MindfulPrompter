@@ -26,6 +26,8 @@ export interface Settings {
 
   // Global
   playSound: boolean;
+  /** P and B modes only: if true, break popups fill the full break duration and cannot be dismissed early. */
+  hardBreak?: boolean;
 
   // Custom popup labels (undefined = use built-in default; "" = show no label)
   popupLabelMindfulness?: string;
@@ -52,6 +54,10 @@ export interface TimerEvent {
   periodsPerSet: number;
   /** Custom popup label to display. undefined = use event-type default; "" = no label. */
   popupLabel?: string;
+  /** Per-event dismiss delay (seconds). Overrides settings.dismissSeconds when set. */
+  dismissSeconds?: number;
+  /** If true, popup auto-dismisses when countdown reaches 0. Used for hard breaks. */
+  autoClose?: boolean;
   /** If true, don't show a popup/notification for this event (e.g., initial session start) */
   silent?: boolean;
 }

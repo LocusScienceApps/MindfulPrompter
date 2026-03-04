@@ -1,20 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TimerEvent } from '@/lib/types';
 
 interface NotificationOverlayProps {
   event: TimerEvent | null;
   dismissSeconds: number;
+  autoClose?: boolean;
   onDismiss: () => void;
 }
 
 export default function NotificationOverlay({
   event,
   dismissSeconds,
+  autoClose,
   onDismiss,
 }: NotificationOverlayProps) {
   const [countdown, setCountdown] = useState(dismissSeconds);
+  // Refs so the interval callback can read current values without stale closures
+  const autoCloseRef = useRef(autoClose ?? false);
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => { autoCloseRef.current = autoClose ?? false; }, [autoClose]);
+  useEffect(() => { onDismissRef.current = onDismiss; }, [onDismiss]);
 
   // Reset countdown whenever a new event arrives
   useEffect(() => {
@@ -25,6 +32,10 @@ export default function NotificationOverlay({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          // Hard breaks auto-dismiss when the full break duration has elapsed
+          if (autoCloseRef.current) {
+            setTimeout(() => onDismissRef.current(), 50);
+          }
           return 0;
         }
         return prev - 1;

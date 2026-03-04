@@ -32,6 +32,7 @@ export default function Customize({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const [promptRaw, setPromptRaw] = useState('');
+  const [showHardBreakConfirm, setShowHardBreakConfirm] = useState(false);
 
   const { mode } = s;
 
@@ -174,6 +175,54 @@ export default function Customize({
               }
             />
           </SettingField>
+
+          <SettingField
+            label="Lock screen during breaks"
+            helper="When enabled, the break popup cannot be dismissed early — it stays up for the full break duration."
+          >
+            <YesNoToggle
+              value={s.hardBreak ?? false}
+              yesLabel="Yes, lock it"
+              noLabel="No, dismissible"
+              onChange={(v) => {
+                if (v && !s.hardBreak) {
+                  setShowHardBreakConfirm(true);
+                } else {
+                  update({ hardBreak: v });
+                  setShowHardBreakConfirm(false);
+                }
+              }}
+            />
+          </SettingField>
+
+          {showHardBreakConfirm && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+              <p className="text-sm font-semibold text-amber-900">Are you sure?</p>
+              <p className="text-sm text-amber-800">
+                When enabled, break popups will stay on screen for the full break duration.
+                You won&rsquo;t be able to use your computer until the break ends, even if
+                you&rsquo;re in the middle of something important.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowHardBreakConfirm(false);
+                    update({ hardBreak: true });
+                  }}
+                  className="flex-1 !bg-amber-600 hover:!bg-amber-700"
+                >
+                  Enable Hard Breaks
+                </Button>
+                <Button
+                  onClick={() => setShowHardBreakConfirm(false)}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
 
           <SettingField
             label='Work periods per set'

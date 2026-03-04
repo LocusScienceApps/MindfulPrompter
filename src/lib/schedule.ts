@@ -265,6 +265,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
           popupLabel: resolveLabel('long_break', s),
+          ...(s.hardBreak === true && { dismissSeconds: longBreakSec, autoClose: true }),
         });
         offset += longBreakSec;
       } else {
@@ -281,6 +282,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
           popupLabel: resolveLabel('short_break', s),
+          ...(s.hardBreak === true && { dismissSeconds: breakSec, autoClose: true }),
         });
         offset += breakSec;
       }

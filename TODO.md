@@ -98,11 +98,19 @@ No need to manually unregister the service worker — the batch files handle por
 - [x] `close_notification_window` closes all overlay windows (emits `notification-replacing` first)
 - [x] `capabilities/default.json` adds `notification-overlay-*` glob
 
-### Item 3b — Hard break option (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`, `popup/page.tsx`)
-- [ ] New `hardBreak: boolean` setting (P and B modes, default false)
-- [ ] Toggle in Customize > Break section with amber warning + confirmation
-- [ ] When enabled: break events get `isHardBreak: true` + `dismissSeconds = full break duration`
-- [ ] Popup shows break countdown; OK button disabled until 0; auto-dismisses
+### Item 3b — Hard break option ✅ CODED (Session 16, not yet tested)
+- [x] `hardBreak?: boolean` in Settings; `dismissSeconds?` + `autoClose?` on TimerEvent
+- [x] defaults.ts: hardBreak: false in P and B factory defaults
+- [x] schedule.ts: break events get `dismissSeconds: breakSec/longBreakSec, autoClose: true` when hardBreak
+- [x] Customize.tsx: "Lock screen during breaks" toggle after break length; amber confirmation on enable
+- [x] Timer.tsx: `event.dismissSeconds ?? settings.dismissSeconds`; passes `event.autoClose`
+- [x] NotificationOverlay.tsx: `autoClose` prop; auto-calls onDismiss when countdown hits 0
+- [x] popup/page.tsx: parses `autoClose` URL param; `handleDismissRef` auto-fires when countdown hits 0
+- [x] lib.rs: `auto_close: bool` in NotificationData + URL param; tauri.ts passes it through
+
+**To test:**
+- [ ] Browser: enable hard breaks → P-mode → break fires with full-duration countdown, OK disabled, auto-dismisses
+- [ ] Tauri: same test in native popup
 
 ### Item 4 — Mindfulness scope for Both mode (`types.ts`, `defaults.ts`, `schedule.ts`, `Customize.tsx`)
 - [ ] New `bothMindfulnessScope: 'prompts-only' | 'breaks' | 'work-starts' | 'all'` (default `'prompts-only'`)

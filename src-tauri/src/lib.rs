@@ -10,6 +10,7 @@ pub struct NotificationData {
     pub prompt_text: String,
     pub dismiss_seconds: u32,
     pub popup_label: Option<String>,
+    pub auto_close: bool,
 }
 
 pub struct NotificationState(pub Mutex<Option<NotificationData>>);
@@ -82,6 +83,7 @@ async fn show_notification(
     prompt_text: String,
     dismiss_seconds: u32,
     popup_label: Option<String>,
+    auto_close: bool,
 ) -> Result<(), String> {
     // Store data so the popup page can fetch it via get_notification_data (used in prod builds)
     *state.0.lock().unwrap() = Some(NotificationData {
@@ -91,6 +93,7 @@ async fn show_notification(
         prompt_text: prompt_text.clone(),
         dismiss_seconds,
         popup_label: popup_label.clone(),
+        auto_close,
     });
 
     // Close any existing notification window first.
@@ -117,7 +120,8 @@ async fn show_notification(
             .append_pair("title", &title)
             .append_pair("body", &body)
             .append_pair("promptText", &prompt_text)
-            .append_pair("dismissSeconds", &dismiss_seconds.to_string());
+            .append_pair("dismissSeconds", &dismiss_seconds.to_string())
+            .append_pair("autoClose", if auto_close { "true" } else { "false" });
         if let Some(label) = &popup_label {
             u.query_pairs_mut().append_pair("popupLabel", label);
         }

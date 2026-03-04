@@ -11,6 +11,8 @@ interface NotificationData {
   dismissSeconds: number;
   /** undefined = use event-type default; "" = no label; other = custom label */
   popupLabel?: string | null;
+  /** If true, popup auto-dismisses when countdown reaches 0 (hard break). */
+  autoClose?: boolean;
 }
 
 const EVENT_META: Record<string, { label: string; accent: string }> = {
@@ -28,6 +30,8 @@ export default function PopupPage() {
   // Refs so effects registered once can always read current values
   const countdownRef = useRef(0);
   const isOverlayRef = useRef(false);
+  const autoCloseRef = useRef(false);
+  const handleDismissRef = useRef<() => void>(() => {});
   // Set true when Rust emits "notification-replacing" so onCloseRequested lets the close through
   const replacingRef = useRef(false);
 
@@ -46,6 +50,8 @@ export default function PopupPage() {
       // Load notification data from URL params (dev mode)
       const dismissSeconds = parseInt(params.get('dismissSeconds') ?? '5', 10);
       const rawLabel = params.get('popupLabel');
+      const autoClose = params.get('autoClose') === 'true';
+      autoCloseRef.current = autoClose;
       setData({
         eventType,
         title: params.get('title') ?? '',
@@ -53,6 +59,7 @@ export default function PopupPage() {
         promptText: params.get('promptText') ?? '',
         dismissSeconds,
         popupLabel: rawLabel, // null = use default, '' = no label, text = custom
+        autoClose,
       });
       setCountdown(dismissSeconds);
     } else if (isTauri()) {
@@ -67,6 +74,7 @@ export default function PopupPage() {
           invoke<NotificationData>('get_notification_data')
         ).then((result) => {
           if (result) {
+            autoCloseRef.current = result.autoClose ?? false;
             setData(result);
             setCountdown(result.dismissSeconds);
           }
@@ -94,14 +102,21 @@ export default function PopupPage() {
     return () => { unlisteners.forEach((fn) => fn()); };
   }, []);
 
-  // Keep ref in sync so focus-steal / close-block effects always have current value
+  // Keep refs in sync
   useEffect(() => { countdownRef.current = countdown; }, [countdown]);
 
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setInterval(() => {
       setCountdown((prev) => {
-        if (prev <= 1) { clearInterval(timer); return 0; }
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Hard break: auto-dismiss when the full break duration has elapsed
+          if (autoCloseRef.current) {
+            setTimeout(() => handleDismissRef.current(), 50);
+          }
+          return 0;
+        }
         return prev - 1;
       });
     }, 1000);
@@ -159,6 +174,9 @@ export default function PopupPage() {
       } catch { /* nothing more to try */ }
     }
   }, [countdown, data?.eventType]);
+
+  // Keep handleDismissRef in sync so the auto-close interval callback always has the current version
+  useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

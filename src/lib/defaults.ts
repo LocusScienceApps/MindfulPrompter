@@ -36,6 +36,7 @@ export function getDefaults(mode: AppMode): Settings {
         multipleSets: false,
         longBreakMinutes: 20, // 4 * 5
         numberOfSets: 1,
+        hardBreak: false,
         // No mindfulness — use placeholder values
         promptIntervalMinutes: 0,
         promptText: '',
@@ -53,6 +54,7 @@ export function getDefaults(mode: AppMode): Settings {
         multipleSets: false,
         longBreakMinutes: 20,
         numberOfSets: 1,
+        hardBreak: false,
         // Mindfulness defaults (interval = work / 2)
         promptIntervalMinutes: 12.5,
         promptCount: 0,

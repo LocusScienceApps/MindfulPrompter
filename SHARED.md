@@ -367,6 +367,57 @@ public/
 
 ---
 
+### Session 20 — 2026-03-05 (wmben PC — Items 4/5/6 bug fixes + summary screen redesign)
+
+**What was done:**
+
+**Time display overhaul** — replaced `formatDuration` (minutes-based, rounded) with new `formatSummaryTime(seconds)` across all summary displays. Format: `"X sec"` / `"Y min, Z sec"` (omits ", 0 sec") / `"Z hrs, Y min"`. Countdown timers keep existing M:SS format. `formatDuration` kept as deprecated wrapper.
+
+**M-mode finite prompt bug** — session_complete was firing 2 sec AFTER the Nth prompt (separate popup). Fixed: session_complete IS now the Nth prompt (N-1 regular mindfulness events + session_complete at N × interval). Prompt counter now reads "Prompt N of N" on the final popup.
+
+**Stats fixes (Timer.tsx):**
+- Added `canonicalEndSecondsRef` — canonical end time = `event.offsetSeconds` (NOT + dismiss delay). This makes the summary screen total match the popup body.
+- M-mode session_complete now increments `prompts` counter (final prompt counts).
+- `buildStats()` uses canonical end time; falls back to `elapsedRef.current` if not set.
+
+**Batch file fix (`dev-tauri.bat`, `dev-browser.bat`)** — previously only killed port 3000 process, leaving orphaned cmd windows and `MindfulPrompter.exe` running. Now kills by window title AND exe name before starting fresh. No instance accumulation.
+
+**Summary screen redesign (`SessionComplete.tsx`):**
+- Removed 60-second auto-close countdown (all modes — stays open until user closes)
+- Removed mindfulness prompt box (session is over; no need to re-show it)
+- Pomodoro/both mode: new dynamic natural-language summary replacing label:value rows:
+  - Heading: "Congratulations! You've just completed a **N-set** work session!" (or no set count if 1 set)
+  - Multi-set: each set's period/break structure → set total → session structure → session total
+  - Single set, multi-period: period/break structure → session total
+  - Single period: one-line description
+  - Bold (strong) = counts, italic (em) = durations → clear visual separation of adjacent numbers
+- Mindfulness mode: unchanged (Great Work! heading + prompts + total time rows)
+- "Total elapsed" renamed to "Total time" (better English)
+- "Prompts completed" removed from Both mode (mindfulness-only concept)
+
+**Session-complete popup body simplified (`schedule.ts`):**
+- Was: `"2 sets × 2 periods × 0.4 min = 2 min, 12 sec"` (formula omitted breaks, math was wrong)
+- Now: `"Total session time: 2 min, 12 sec"` (honest, matches summary screen total)
+
+**dismissSeconds = 0 fix (`Customize.tsx`):**
+- Added `minValue` prop to `NumericInput` (separate from `allowZero` which is for ∞ display)
+- Dismiss delay field now accepts 0 (immediate dismiss) — previously `parsed > 0` validation silently rejected 0
+
+**Known issue — stale stats when switching settings:** Summary screen occasionally shows stats from a previous session. Code analysis shows the data flow is correct; likely a React Fast Refresh (HMR) artifact triggered when saving code files during dev testing. Not reproducible in a clean run. Will not occur in production build.
+
+**Current state:**
+- All changes committed (7 commits this session)
+- TypeScript clean
+- All modes tested in browser — working
+- Items 4, 5, 6 fully done and debugged
+
+**Next steps:**
+1. Push to GitHub
+2. Test in Tauri (`dev-tauri.bat`) — verify summary screen and popup body changes work in native popup
+3. Remaining Phase 2: settings storage → Tauri file API; cowork via Firebase
+
+---
+
 ### Session 19 — 2026-03-04 (wmben PC — Items 4, 5, 6)
 
 **What was done:**

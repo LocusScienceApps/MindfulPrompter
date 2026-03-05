@@ -248,9 +248,10 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
             if (event.promptCountTotal !== undefined) {
               statsRef.current.prompts++;
             }
-            // Record canonical end time = when the popup fires + when dismiss delay expires
-            const dismissSecs = event.dismissSeconds ?? settingsRef.current.dismissSeconds;
-            canonicalEndSecondsRef.current = event.offsetSeconds + dismissSecs;
+            // Record canonical end time = when the session_complete event fires.
+            // We do NOT add the dismiss delay: the summary screen total should match
+            // the popup body "Total session time: X", not include forced-open delay.
+            canonicalEndSecondsRef.current = event.offsetSeconds;
           }
 
           setCurrentEvent(event);

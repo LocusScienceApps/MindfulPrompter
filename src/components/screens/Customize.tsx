@@ -335,6 +335,7 @@ export default function Customize({
               defaultValue={modeDefaults.dismissSeconds}
               unit="seconds"
               integerOnly
+              minValue={0}
               onChange={(v) => update({ dismissSeconds: v })}
             />
           </SettingField>
@@ -504,6 +505,7 @@ function NumericInput({
   unit,
   integerOnly = false,
   allowZero = false,
+  minValue,
   onChange,
 }: {
   value: number;
@@ -511,6 +513,8 @@ function NumericInput({
   unit: string;
   integerOnly?: boolean;
   allowZero?: boolean;
+  /** For non-allowZero fields that need a lower minimum (e.g. minValue={0} for dismiss delay). */
+  minValue?: number;
   onChange: (v: number) => void;
 }) {
   // When allowZero=true and value=0:
@@ -531,7 +535,8 @@ function NumericInput({
     }
     if (raw === '∞') return; // already representing 0; no state change needed
     const parsed = integerOnly ? parseInt(raw, 10) : parseFloat(raw);
-    if (!isNaN(parsed) && (allowZero ? parsed >= 0 : parsed > 0)) {
+    const atLeast = allowZero ? 0 : (minValue !== undefined ? minValue : (integerOnly ? 1 : 0.5));
+    if (!isNaN(parsed) && parsed >= atLeast) {
       onChange(parsed);
       // When user types 0, display as solid ∞ (if default≠0) or gray ∞ placeholder (if default=0)
       if (parsed === 0 && allowZero) setRawInput(defaultValue === 0 ? '' : '∞');
@@ -542,6 +547,7 @@ function NumericInput({
   // Manual parsing/validation is already in handleChange so type="number" spinners aren't needed.
   const inputType = allowZero ? 'text' : 'number';
   const placeholderText = allowZero && defaultValue === 0 ? '∞' : formatNum(defaultValue);
+  const effectiveMin = minValue !== undefined ? minValue : (integerOnly ? 1 : 0.5);
 
   return (
     <div className="flex items-center gap-3">
@@ -552,7 +558,7 @@ function NumericInput({
         placeholder={placeholderText}
         onChange={handleChange}
         {...(!allowZero && {
-          min: integerOnly ? 1 : 0.5,
+          min: effectiveMin,
           step: integerOnly ? 1 : 0.5,
         })}
         className="w-28 rounded-lg border-2 border-gray-300 px-3 py-2 text-base transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"

@@ -33,14 +33,6 @@ export default function SessionComplete({
         </div>
       )}
 
-      {/* Mindfulness prompt (mindfulness + both modes) */}
-      {(mode === 'mindfulness' || mode === 'both') && settings.promptText && (
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
-          <p className="text-lg italic text-indigo-800">
-            &ldquo;{settings.promptText}&rdquo;
-          </p>
-        </div>
-      )}
 
       {/* Summary */}
       {isPomoMode ? (
@@ -58,7 +50,7 @@ export default function SessionComplete({
               )}
               {stats.totalElapsedSeconds > 0 && (
                 <StatRow
-                  label="Total elapsed"
+                  label="Total time"
                   value={formatSummaryTime(stats.totalElapsedSeconds)}
                 />
               )}
@@ -136,14 +128,14 @@ function PomoSummary({
           {multiPeriod ? (
             <p>
               Each set comprised <strong>{sessionsPerSet}</strong>{' '}
-              <strong>{workLabel}</strong> work {periodWord} separated by{' '}
-              <strong>{breakCount}</strong> <strong>{breakLabel}</strong>{' '}
+              <em>{workLabel}</em> work {periodWord} separated by{' '}
+              <strong>{breakCount}</strong> <em>{breakLabel}</em>{' '}
               {breakCount === 1 ? 'break' : 'breaks'}.
             </p>
           ) : (
             <p>
               Each set comprised <strong>1</strong>{' '}
-              <strong>{workLabel}</strong> work period.
+              <em>{workLabel}</em> work period.
             </p>
           )}
 
@@ -154,7 +146,7 @@ function PomoSummary({
           <p>
             The work session comprised <strong>{setsCompleted}</strong> sets
             separated by <strong>{longBreakCount}</strong>{' '}
-            <strong>{longBreakLabel}</strong>{' '}
+            <em>{longBreakLabel}</em>{' '}
             {longBreakCount === 1 ? 'long break' : 'long breaks'}.
           </p>
 
@@ -169,8 +161,8 @@ function PomoSummary({
           {/* Single set, multiple periods */}
           <p>
             Your work session comprised <strong>{sessionsPerSet}</strong>{' '}
-            <strong>{workLabel}</strong> work {periodWord} separated by{' '}
-            <strong>{breakCount}</strong> <strong>{breakLabel}</strong>{' '}
+            <em>{workLabel}</em> work {periodWord} separated by{' '}
+            <strong>{breakCount}</strong> <em>{breakLabel}</em>{' '}
             {breakCount === 1 ? 'break' : 'breaks'}.
           </p>
           <p>
@@ -182,7 +174,7 @@ function PomoSummary({
         /* Single set, single period */
         <p>
           Your work session comprised <strong>1</strong>{' '}
-          <strong>{workLabel}</strong> work period. Congratulations again!
+          <em>{workLabel}</em> work period. Congratulations again!
         </p>
       )}
     </div>

@@ -177,10 +177,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
   }
 
   function sessionCompleteBody(timeStr: string): string {
-    if (numSets > 1) {
-      return `${numSets} sets × ${sessionsPerSet} periods × ${formatNum(s.workMinutes)} min = ${timeStr}`;
-    }
-    return `${sessionsPerSet} periods × ${formatNum(s.workMinutes)} min = ${timeStr}`;
+    return `Total session time: ${timeStr}`;
   }
 
   // ──────────────────────────────────────────────────────────────────

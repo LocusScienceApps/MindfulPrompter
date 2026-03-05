@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import type { Settings, SessionStats } from '@/lib/types';
-import { formatSummaryTime } from '@/lib/format';
+import { formatSummaryTime, formatNum } from '@/lib/format';
 import Button from '../ui/Button';
-
-const AUTO_DISMISS_SECONDS = 60;
 
 interface SessionCompleteProps {
   settings: Settings;
@@ -20,42 +17,23 @@ export default function SessionComplete({
   onStartAgain,
   onNewSession,
 }: SessionCompleteProps) {
-  const [countdown, setCountdown] = useState(AUTO_DISMISS_SECONDS);
-
-  // 60-second auto-dismiss countdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Navigate away once countdown hits 0 (kept separate so the state updater above
-  // doesn't call a parent setter mid-render, which React 18 forbids)
-  useEffect(() => {
-    if (countdown === 0) onNewSession();
-  }, [countdown, onNewSession]);
-
   const { mode } = settings;
-  const showPomoStats = (mode === 'pomodoro' || mode === 'both') && stats && stats.sessionsCompleted > 0;
-  const showPromptStats = (mode === 'mindfulness' || mode === 'both') && stats && stats.promptsCompleted > 0;
+  const isPomoMode = mode === 'pomodoro' || mode === 'both';
 
   return (
     <div className="space-y-8 text-center">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">
-          Great Work!
-        </h2>
-        <p className="mt-2 text-gray-500">Your session is complete.</p>
-      </div>
 
-      {/* Show the mindfulness prompt */}
+      {/* Heading */}
+      {isPomoMode ? (
+        <PomoHeading setsCompleted={stats?.setsCompleted ?? 0} />
+      ) : (
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Great Work!</h2>
+          <p className="mt-2 text-gray-500">Your session is complete.</p>
+        </div>
+      )}
+
+      {/* Mindfulness prompt (mindfulness + both modes) */}
       {(mode === 'mindfulness' || mode === 'both') && settings.promptText && (
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
           <p className="text-lg italic text-indigo-800">
@@ -64,42 +42,29 @@ export default function SessionComplete({
         </div>
       )}
 
-      {/* Session stats */}
-      {stats && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <dl className="space-y-3">
-            {showPomoStats && (
-              <>
+      {/* Summary */}
+      {isPomoMode ? (
+        <PomoSummary settings={settings} stats={stats} />
+      ) : (
+        /* Mindfulness-only stats */
+        stats && (
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <dl className="space-y-3">
+              {stats.promptsCompleted > 0 && (
                 <StatRow
-                  label="Periods completed"
-                  value={
-                    stats.setsCompleted > 1
-                      ? `${stats.sessionsCompleted} (${stats.setsCompleted} sets)`
-                      : String(stats.sessionsCompleted)
-                  }
+                  label="Prompts completed"
+                  value={String(stats.promptsCompleted)}
                 />
-                {stats.totalWorkMinutes > 0 && (
-                  <StatRow
-                    label="Total work time"
-                    value={formatSummaryTime(stats.totalWorkMinutes * 60)}
-                  />
-                )}
-              </>
-            )}
-            {showPromptStats && (
-              <StatRow
-                label="Prompts completed"
-                value={String(stats.promptsCompleted)}
-              />
-            )}
-            {stats.totalElapsedSeconds > 0 && (
-              <StatRow
-                label="Total elapsed"
-                value={formatSummaryTime(stats.totalElapsedSeconds)}
-              />
-            )}
-          </dl>
-        </div>
+              )}
+              {stats.totalElapsedSeconds > 0 && (
+                <StatRow
+                  label="Total elapsed"
+                  value={formatSummaryTime(stats.totalElapsedSeconds)}
+                />
+              )}
+            </dl>
+          </div>
+        )
       )}
 
       <div className="flex flex-col gap-3">
@@ -110,13 +75,121 @@ export default function SessionComplete({
           New session
         </Button>
       </div>
-
-      <p className="text-xs text-gray-400">
-        Auto-closing in {countdown} second{countdown !== 1 ? 's' : ''}
-      </p>
     </div>
   );
 }
+
+// ── Pomodoro / Both heading ───────────────────────────────────────────────────
+
+function PomoHeading({ setsCompleted }: { setsCompleted: number }) {
+  if (setsCompleted > 1) {
+    return (
+      <h2 className="text-2xl font-bold text-gray-900">
+        Congratulations! You&apos;ve just completed a{' '}
+        <strong>{setsCompleted}-set</strong> work session!
+      </h2>
+    );
+  }
+  return (
+    <h2 className="text-2xl font-bold text-gray-900">
+      Congratulations! You&apos;ve just completed a work session!
+    </h2>
+  );
+}
+
+// ── Pomodoro / Both summary text ──────────────────────────────────────────────
+
+function PomoSummary({
+  settings,
+  stats,
+}: {
+  settings: Settings;
+  stats: SessionStats | null;
+}) {
+  if (!stats) return null;
+
+  const { workMinutes, breakMinutes, longBreakMinutes, sessionsPerSet } = settings;
+  const { setsCompleted, totalElapsedSeconds } = stats;
+
+  const multiSet = setsCompleted > 1;
+  const multiPeriod = sessionsPerSet > 1;
+
+  // Set duration: N periods × work + (N-1) breaks
+  const setDurationSec =
+    sessionsPerSet * workMinutes * 60 + (sessionsPerSet - 1) * breakMinutes * 60;
+
+  const workLabel = `${formatNum(workMinutes)}-min`;
+  const breakLabel = `${formatNum(breakMinutes)}-min`;
+  const longBreakLabel = `${formatNum(longBreakMinutes)}-min`;
+  const periodWord = sessionsPerSet === 1 ? 'period' : 'periods';
+  const breakCount = sessionsPerSet - 1;
+  const longBreakCount = setsCompleted - 1;
+
+  const totalStr = formatSummaryTime(totalElapsedSeconds);
+  const setTotalStr = formatSummaryTime(setDurationSec);
+
+  return (
+    <div className="space-y-2 text-gray-700 text-base leading-relaxed">
+      {multiSet ? (
+        <>
+          {/* Line 1: set period description */}
+          {multiPeriod ? (
+            <p>
+              Each set comprised <strong>{sessionsPerSet}</strong>{' '}
+              <strong>{workLabel}</strong> work {periodWord} separated by{' '}
+              <strong>{breakCount}</strong> <strong>{breakLabel}</strong>{' '}
+              {breakCount === 1 ? 'break' : 'breaks'}.
+            </p>
+          ) : (
+            <p>
+              Each set comprised <strong>1</strong>{' '}
+              <strong>{workLabel}</strong> work period.
+            </p>
+          )}
+
+          {/* Line 2: set total */}
+          <p>That&apos;s a total of <strong>{setTotalStr}</strong> per set.</p>
+
+          {/* Line 3: sets + long breaks */}
+          <p>
+            The work session comprised <strong>{setsCompleted}</strong> sets
+            separated by <strong>{longBreakCount}</strong>{' '}
+            <strong>{longBreakLabel}</strong>{' '}
+            {longBreakCount === 1 ? 'long break' : 'long breaks'}.
+          </p>
+
+          {/* Line 4: session total */}
+          <p>
+            That&apos;s a total of <strong>{totalStr}</strong>.{' '}
+            Congratulations again!
+          </p>
+        </>
+      ) : multiPeriod ? (
+        <>
+          {/* Single set, multiple periods */}
+          <p>
+            Your work session comprised <strong>{sessionsPerSet}</strong>{' '}
+            <strong>{workLabel}</strong> work {periodWord} separated by{' '}
+            <strong>{breakCount}</strong> <strong>{breakLabel}</strong>{' '}
+            {breakCount === 1 ? 'break' : 'breaks'}.
+          </p>
+          <p>
+            That&apos;s a total of <strong>{totalStr}</strong>.{' '}
+            Congratulations again!
+          </p>
+        </>
+      ) : (
+        /* Single set, single period */
+        <p>
+          Your work session comprised <strong>1</strong>{' '}
+          <strong>{workLabel}</strong> work period. Congratulations again!
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Shared stat row (mindfulness mode only) ───────────────────────────────────
 
 function StatRow({ label, value }: { label: string; value: string }) {
   return (

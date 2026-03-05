@@ -18,7 +18,7 @@ export function formatNum(val: number): string {
 export function formatDuration(totalMinutes: number): string {
   if (totalMinutes < 1) {
     const secs = Math.round(totalMinutes * 60);
-    return `${secs}s`;
+    return `${secs} second${secs !== 1 ? 's' : ''}`;
   }
   const hours = Math.floor(totalMinutes / 60);
   const mins = Math.round(totalMinutes % 60);

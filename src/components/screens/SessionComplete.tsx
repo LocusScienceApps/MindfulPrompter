@@ -113,7 +113,7 @@ export default function SessionComplete({
       </div>
 
       <p className="text-xs text-gray-400">
-        Auto-closing in {countdown}s
+        Auto-closing in {countdown} second{countdown !== 1 ? 's' : ''}
       </p>
     </div>
   );

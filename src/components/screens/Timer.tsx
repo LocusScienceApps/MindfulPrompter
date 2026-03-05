@@ -175,6 +175,9 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
   const elapsedRef = useRef(0);
   // Accumulate stats via ref so the tick callback always updates the latest value
   const statsRef = useRef({ sessions: 0, sets: 0, prompts: 0 });
+  // Canonical session end time: set when session_complete fires (event offset + dismiss delay).
+  // Used so "Total elapsed" reflects the scheduled duration, not when the user clicked OK.
+  const canonicalEndSecondsRef = useRef<number | null>(null);
 
   const buildStats = useCallback((): SessionStats => {
     return {
@@ -182,7 +185,7 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
       setsCompleted: statsRef.current.sets,
       promptsCompleted: statsRef.current.prompts,
       totalWorkMinutes: statsRef.current.sessions * settingsRef.current.workMinutes,
-      totalElapsedSeconds: elapsedRef.current,
+      totalElapsedSeconds: canonicalEndSecondsRef.current ?? elapsedRef.current,
     };
   }, []);
 
@@ -241,6 +244,13 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
           } else if (event.type === 'session_complete') {
             statsRef.current.sessions++;
             statsRef.current.sets++;
+            // M-mode: session_complete IS the final mindfulness prompt — count it
+            if (event.promptCountTotal !== undefined) {
+              statsRef.current.prompts++;
+            }
+            // Record canonical end time = when the popup fires + when dismiss delay expires
+            const dismissSecs = event.dismissSeconds ?? settingsRef.current.dismissSeconds;
+            canonicalEndSecondsRef.current = event.offsetSeconds + dismissSecs;
           }
 
           setCurrentEvent(event);

@@ -1,5 +1,5 @@
 import type { Settings, TimerEvent, MindfulnessScope } from './types';
-import { formatNum } from './format';
+import { formatNum, formatDuration } from './format';
 
 /**
  * Compute the full schedule of events from settings.
@@ -68,11 +68,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
   // Shows the mindfulness prompt + counter "Prompt N of N" + session summary below.
   if (s.promptCount > 0) {
     const totalMin = (count * intervalSec) / 60;
-    const hours = Math.floor(totalMin / 60);
-    const mins = Math.round(totalMin % 60);
-    const timeStr = hours > 0
-      ? `${hours}h ${mins}m`
-      : `${mins} minute${mins !== 1 ? 's' : ''}`;
+    const timeStr = formatDuration(totalMin);
     events.push({
       offsetSeconds: count * intervalSec,
       type: 'session_complete',

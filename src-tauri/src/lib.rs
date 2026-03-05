@@ -206,6 +206,17 @@ pub fn run() {
     tauri::Builder::default()
         .manage(NotificationState(Mutex::new(None)))
         .setup(|app| {
+            // Set window icon (must be done in Rust; not configurable in tauri.conf.json v2)
+            if let Some(main_window) = app.get_webview_window("main") {
+                let icon_bytes = include_bytes!("../icons/icon.png");
+                if let Ok(img) = image::load_from_memory(icon_bytes) {
+                    let rgba = img.to_rgba8();
+                    let (w, h) = image::GenericImageView::dimensions(&rgba);
+                    let icon = tauri::image::Image::new_owned(rgba.into_raw(), w, h);
+                    let _ = main_window.set_icon(icon);
+                }
+            }
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

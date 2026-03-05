@@ -1,9 +1,8 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — Items 1–6 all done ✅; remaining Phase 2 next
+## Status: Phase 2 (Tauri) in progress — Tauri verification done ✅; settings + cowork remain
 
-Items 4, 5, 6 coded (Session 19) + bugs fixed (Sessions 20–21).
-All three modes tested in browser and working.
+Items 1–6 coded + tested (Sessions 16–21). Tauri native window verified (Session 22).
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 Batch files now kill all previous instances (cmd window + exe + port 3000) before starting fresh.
@@ -13,9 +12,14 @@ Batch files now kill all previous instances (cmd window + exe + port 3000) befor
 ## Immediate next steps
 
 ### 1. ✅ Items 1–6 all coded and tested — DONE (Sessions 16–21)
-### 2. ✅ Session 20 + 21 commits pushed to GitHub
-### 3. Test Tauri (`dev-tauri.bat`) — verify layout, images, title changes in native window
-### 4. Remaining Phase 2: settings storage → Tauri file API; cowork via Firebase
+### 2. ✅ Tauri layout, images, title, icon verified — DONE (Session 22)
+### 3. Settings storage: `localStorage` → Tauri file system API (AppData)
+- Keep `localStorage` path for browser dev; use Tauri file API when `isTauri()`
+- Add Export/Import settings buttons
+- Key: `mindful-prompter-v2`
+### 4. Cowork: Firebase Realtime Database for shared session codes
+- Host generates 6-char room code; guests enter it
+- Everyone receives same timer events in real-time; ephemeral (nothing persisted)
 
 ---
 

@@ -367,6 +367,34 @@ public/
 
 ---
 
+### Session 22 — 2026-03-05 (wmben PC — Tauri icon fix)
+
+**What was done:**
+
+**Tauri window icon:**
+- In Tauri v2, window icon cannot be set in `tauri.conf.json` — must be done in Rust
+- Added `image` crate (`v0.25`, PNG-only) to `Cargo.toml`
+- In `lib.rs` `setup()`: decode `icons/icon.png` → RGBA bytes → `tauri::image::Image::new_owned()` → `main_window.set_icon()`
+- Taskbar icon (embedded in `.exe`) was correct already — Windows had cached the old Tauri icon; cleared with `ie4uinit.exe -show` after restart
+- Tauri layout, images, and title in native window verified ✅ — Phase 2 Tauri verification DONE
+
+**Current state:**
+- All changes committed and pushed
+- Phase 2 Tauri verification complete
+- Remaining Phase 2: settings storage + cowork
+
+**Next steps:**
+1. Settings storage: switch from `localStorage` → Tauri file system API (AppData)
+   - Key: `mindful-prompter-v2` in `localStorage` → JSON file in AppData
+   - Provide Export/Import buttons for backup to Dropbox etc.
+   - Must keep `localStorage` path working for browser dev/testing
+2. Cowork feature: Firebase Realtime Database for shared session codes
+   - Host generates 6-char room code; guests enter it
+   - Everyone receives same timer events in real-time
+   - Sessions ephemeral (nothing stored after session ends)
+
+---
+
 ### Session 21 — 2026-03-05 (wmben PC — bug fixes + landing page redesign + logo)
 
 **What was done:**

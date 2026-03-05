@@ -26,7 +26,8 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
   const events: TimerEvent[] = [];
   const intervalSec = s.promptIntervalMinutes * 60;
   const count = s.promptCount > 0 ? s.promptCount : Math.floor((24 * 3600) / intervalSec);
-  const promptCountTotal = s.promptCount > 0 ? s.promptCount : undefined;
+  // 0 = indefinite (sentinel to distinguish M-mode from Both-mode in the counter display)
+  const promptCountTotal = s.promptCount > 0 ? s.promptCount : 0;
 
   // Initial silent event at t=0 to mark session start
   events.push({
@@ -64,7 +65,9 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
     const totalMin = (count * intervalSec) / 60;
     const hours = Math.floor(totalMin / 60);
     const mins = Math.round(totalMin % 60);
-    const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    const timeStr = hours > 0
+      ? `${hours}h ${mins}m`
+      : `${mins} minute${mins !== 1 ? 's' : ''}`;
     events.push({
       offsetSeconds: count * intervalSec + 2,
       type: 'session_complete',
@@ -197,18 +200,21 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           : 'Break over. Back to Work!';
 
       // --- Work phase ---
+      const hasWorkStartPrompt = showPromptOn.workStart && !isFirst;
       events.push({
         offsetSeconds: offset,
         type: 'work_start',
         title: workStartTitle,
         body: isFirst ? '' : workStartBody(set1, period1),
-        promptText: showPromptOn.workStart && !isFirst ? s.promptText : '',
+        promptText: hasWorkStartPrompt ? s.promptText : '',
         setNumber: set1,
         sessionNumber: period1,
         globalSessionNumber: globalSession,
         totalSets: storedTotalSets,
         periodsPerSet: storedPeriodsPerSet,
         silent: isFirst,
+        // No prompt → immediately dismissible; prompt → use configured delay (via Timer.tsx fallback)
+        ...(hasWorkStartPrompt ? {} : { dismissSeconds: 0 }),
       });
 
       // Mid-work mindfulness reminders
@@ -253,7 +259,8 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           globalSessionNumber: globalSession,
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
-          dismissSeconds: 0, // Pomodoro/Both session_complete is immediately dismissible
+          // Prompt shown → apply configured delay; no prompt → immediately dismissible
+          dismissSeconds: showPromptOn.sessionComplete ? s.dismissSeconds : 0,
         });
       } else if (isLastPeriodOfSet && !isLastSet) {
         // Long break between sets
@@ -268,7 +275,9 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           globalSessionNumber: globalSession,
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
-          ...(s.hardBreak === true && { dismissSeconds: longBreakSec, autoClose: true }),
+          ...(s.hardBreak === true
+            ? { dismissSeconds: longBreakSec, autoClose: true }
+            : !showPromptOn.longBreak ? { dismissSeconds: 0 } : {}),
         });
         offset += longBreakSec;
       } else {
@@ -284,7 +293,9 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
           globalSessionNumber: globalSession,
           totalSets: storedTotalSets,
           periodsPerSet: storedPeriodsPerSet,
-          ...(s.hardBreak === true && { dismissSeconds: breakSec, autoClose: true }),
+          ...(s.hardBreak === true
+            ? { dismissSeconds: breakSec, autoClose: true }
+            : !showPromptOn.shortBreak ? { dismissSeconds: 0 } : {}),
         });
         offset += breakSec;
       }

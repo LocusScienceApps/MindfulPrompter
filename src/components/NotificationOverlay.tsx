@@ -88,11 +88,20 @@ export default function NotificationOverlay({
           </p>
         )}
 
-        {/* Context info — smaller, below the prompt */}
+        {/* Prompt counter (M-mode only — promptCountTotal defined: 0=indefinite, N=finite) */}
+        {event.type === 'mindfulness' && event.promptCountTotal !== undefined && event.sessionNumber > 0 && (
+          <p className="mt-2 text-center text-xs font-medium text-gray-400 uppercase tracking-widest">
+            {event.promptCountTotal > 0
+              ? `Prompt ${event.sessionNumber} of ${event.promptCountTotal}`
+              : `Prompt ${event.sessionNumber}`}
+          </p>
+        )}
+
+        {/* Context info — title is the event heading, body is detail */}
         {hasContext && (
           <div className={hasPrompt ? 'mt-4 border-t border-gray-100 pt-4 w-full' : 'w-full'}>
             {event.title && (
-              <p className={`text-center text-gray-600 ${hasPrompt ? 'text-sm' : 'text-base font-medium'}`}>
+              <p className={`text-center ${hasPrompt ? 'text-sm font-semibold text-gray-700' : 'text-base font-medium text-gray-600'}`}>
                 {event.title}
               </p>
             )}

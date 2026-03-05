@@ -204,10 +204,11 @@ export default function PopupPage() {
   const hasPrompt = promptText.length > 0;
   const hasContext = title || body;
 
-  // Prompt counter: shown only in M-mode mindfulness events
-  const showCounter = eventType === 'mindfulness' && sessionNumber && sessionNumber > 0;
+  // Prompt counter: shown only for M-mode mindfulness events.
+  // promptCountTotal defined = M-mode (0=indefinite, N=finite); undefined = Both-mode (no counter).
+  const showCounter = eventType === 'mindfulness' && promptCountTotal !== undefined && (sessionNumber ?? 0) > 0;
   const counterText = showCounter
-    ? (promptCountTotal ? `Prompt ${sessionNumber} of ${promptCountTotal}` : `Prompt ${sessionNumber}`)
+    ? (promptCountTotal > 0 ? `Prompt ${sessionNumber} of ${promptCountTotal}` : `Prompt ${sessionNumber}`)
     : null;
 
   return (
@@ -232,11 +233,11 @@ export default function PopupPage() {
           </p>
         )}
 
-        {/* Context (title / body) */}
+        {/* Context (title / body) — title is the event heading, body is detail */}
         {hasContext && (
           <div className={hasPrompt ? 'mt-4 border-t border-gray-100 pt-4 w-full' : 'w-full'}>
             {title && (
-              <p className={`text-center text-gray-600 ${hasPrompt ? 'text-sm' : 'text-base font-medium'}`}>
+              <p className={`text-center ${hasPrompt ? 'text-sm font-semibold text-gray-700' : 'text-base font-medium text-gray-600'}`}>
                 {title}
               </p>
             )}

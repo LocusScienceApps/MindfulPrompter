@@ -1,8 +1,38 @@
 import type { AppMode, Settings, SettingsFile, Preset, PresetSlot } from './types';
+import { isTauri } from './tauri';
 
 const STORAGE_KEY = 'mindful-prompter-v2';
+const SETTINGS_FILE = 'settings.json';
 
-function loadFile(): SettingsFile {
+let cache: SettingsFile = { presets: {} };
+
+// ── Initialization ─────────────────────────────────────────────────────────────
+
+/**
+ * Load settings from disk (Tauri/AppData) or localStorage (browser).
+ * Must be called once on app startup before any storage reads.
+ */
+export async function initStorage(): Promise<void> {
+  if (isTauri()) {
+    cache = await loadFromTauri();
+  } else {
+    cache = loadFromLocalStorage();
+  }
+}
+
+async function loadFromTauri(): Promise<SettingsFile> {
+  try {
+    const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    const raw = await readTextFile(SETTINGS_FILE, { baseDir: BaseDirectory.AppData });
+    const parsed = JSON.parse(raw) as SettingsFile;
+    return { ...parsed, presets: parsed.presets ?? {} };
+  } catch {
+    // File doesn't exist yet (first launch) or read failed — start fresh
+    return { presets: {} };
+  }
+}
+
+function loadFromLocalStorage(): SettingsFile {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { presets: {} };
@@ -13,13 +43,62 @@ function loadFile(): SettingsFile {
   }
 }
 
+// ── Internal read/write ────────────────────────────────────────────────────────
+
+function loadFile(): SettingsFile {
+  return cache;
+}
+
 function saveFile(file: SettingsFile): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
-  } catch {
-    // localStorage may be unavailable (private browsing, storage full)
+  cache = file;
+  if (isTauri()) {
+    void saveTauri(file);
+  } else {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
+    } catch {
+      // localStorage unavailable (private browsing, storage full)
+    }
   }
 }
+
+async function saveTauri(file: SettingsFile): Promise<void> {
+  try {
+    const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    await writeTextFile(SETTINGS_FILE, JSON.stringify(file, null, 2), {
+      baseDir: BaseDirectory.AppData,
+    });
+  } catch (e) {
+    console.error('[storage] Failed to save to AppData:', e);
+  }
+}
+
+// ── Export / Import ────────────────────────────────────────────────────────────
+
+/**
+ * Return the full settings file as a JSON string for backup/export.
+ */
+export function exportSettings(): string {
+  return JSON.stringify(cache, null, 2);
+}
+
+/**
+ * Replace all settings from a JSON string (e.g. from an imported backup file).
+ * Returns true on success, false if the JSON is invalid or malformed.
+ */
+export function importSettings(json: string): boolean {
+  try {
+    const parsed = JSON.parse(json) as SettingsFile;
+    if (typeof parsed !== 'object' || parsed === null) return false;
+    const file: SettingsFile = { ...parsed, presets: parsed.presets ?? {} };
+    saveFile(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── Mode defaults ──────────────────────────────────────────────────────────────
 
 function defaultsKey(mode: AppMode): 'defaultsP' | 'defaultsM' | 'defaultsB' {
   if (mode === 'pomodoro') return 'defaultsP';
@@ -44,6 +123,17 @@ export function saveDefaultsForMode(mode: AppMode, settings: Settings): void {
   file[defaultsKey(mode)] = { ...settings };
   saveFile(file);
 }
+
+/**
+ * Clear saved default overrides for a mode, reverting to factory defaults.
+ */
+export function clearDefaultsForMode(mode: AppMode): void {
+  const file = loadFile();
+  delete file[defaultsKey(mode)];
+  saveFile(file);
+}
+
+// ── Presets ────────────────────────────────────────────────────────────────────
 
 /**
  * List all occupied preset slots for a mode, in slot order (1-5).
@@ -107,14 +197,5 @@ export function renamePreset(slot: PresetSlot, newName: string): void {
 export function deletePreset(slot: PresetSlot): void {
   const file = loadFile();
   delete file.presets[slot];
-  saveFile(file);
-}
-
-/**
- * Clear saved default overrides for a mode, reverting to factory defaults.
- */
-export function clearDefaultsForMode(mode: AppMode): void {
-  const file = loadFile();
-  delete file[defaultsKey(mode)];
   saveFile(file);
 }

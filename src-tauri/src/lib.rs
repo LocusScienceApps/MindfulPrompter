@@ -206,6 +206,11 @@ pub fn run() {
     tauri::Builder::default()
         .manage(NotificationState(Mutex::new(None)))
         .setup(|app| {
+            // Ensure AppData directory exists (Tauri doesn't create it automatically)
+            if let Ok(dir) = app.path().app_data_dir() {
+                let _ = std::fs::create_dir_all(&dir);
+            }
+
             // Set window icon (must be done in Rust; not configurable in tauri.conf.json v2)
             if let Some(main_window) = app.get_webview_window("main") {
                 let icon_bytes = include_bytes!("../icons/icon.png");
@@ -226,6 +231,7 @@ pub fn run() {
             }
             Ok(())
         })
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![show_notification, get_notification_data, close_notification_window])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

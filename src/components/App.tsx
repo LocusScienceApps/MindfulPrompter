@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { AppMode, Screen, Settings, SessionStats } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
-import { getDefaultsForMode, saveDefaultsForMode, clearDefaultsForMode } from '@/lib/storage';
+import { initStorage, getDefaultsForMode, saveDefaultsForMode, clearDefaultsForMode } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
 import ModeSelect from './screens/ModeSelect';
 import DefaultsReview from './screens/DefaultsReview';
@@ -25,9 +25,14 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>('both');
   const [settings, setSettings] = useState<Settings>(getSettingsForMode('both'));
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [storageReady, setStorageReady] = useState(false);
 
   useEffect(() => {
     registerServiceWorker();
+    initStorage().then(() => {
+      setSettings(getSettingsForMode('both'));
+      setStorageReady(true);
+    });
   }, []);
 
   const handleModeSelect = (selectedMode: AppMode) => {
@@ -108,6 +113,14 @@ export default function App() {
   const handleBack = (target: Screen) => {
     setScreen(target);
   };
+
+  if (!storageReady) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Loading…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">

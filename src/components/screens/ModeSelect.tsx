@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import type { AppMode } from '@/lib/types';
+import { exportSettings, importSettings } from '@/lib/storage';
 import Card from '../ui/Card';
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
@@ -76,6 +78,36 @@ const modes: { key: AppMode; title: string; description: string; icon: React.Rea
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ModeSelect({ onSelect }: { onSelect: (mode: AppMode) => void }) {
+  const [importMsg, setImportMsg] = useState('');
+
+  const handleExport = () => {
+    const json = exportSettings();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mindfulprompter-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      const ok = importSettings(text);
+      setImportMsg(ok ? 'Settings imported! Select a mode above to use them.' : 'Import failed: invalid file.');
+      setTimeout(() => setImportMsg(''), 4000);
+    };
+    input.click();
+  };
+
   return (
     <div className="space-y-8">
       <div className="text-center px-2">
@@ -121,6 +153,27 @@ export default function ModeSelect({ onSelect }: { onSelect: (mode: AppMode) => 
             </Card>
           ))}
         </div>
+      </div>
+
+      <div className="pt-4 border-t border-gray-200 text-center">
+        <p className="text-xs text-gray-400 mb-2">Settings backup</p>
+        <div className="flex justify-center gap-6">
+          <button
+            onClick={handleExport}
+            className="text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+          >
+            Export settings
+          </button>
+          <button
+            onClick={handleImport}
+            className="text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+          >
+            Import settings
+          </button>
+        </div>
+        {importMsg && (
+          <p className="mt-2 text-xs text-emerald-600">{importMsg}</p>
+        )}
       </div>
     </div>
   );

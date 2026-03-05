@@ -34,11 +34,27 @@ Check this is set before any new code is written.
 - Provide Export/Import settings buttons so users can back up to Dropbox etc.
 - localStorage is NOT used in the final app (only acceptable during web-only dev phase)
 
-### User Accounts: Phase 3 Only, Optional
+### Anonymous Install IDs (Phase 2, built into Firebase backend)
+- On first launch, generate a UUID and store it locally (Tauri AppData)
+- When connecting to Firebase for cowork, this UUID is sent automatically — no login required
+- Gives from day 1: unique install count, cowork usage frequency, retention data
+- GDPR-friendly — no personal data, disclose in privacy policy
+- This is the foundation for traction data before spending on code signing or app stores
+- **Design the Firebase data model to be account-aware** even though accounts come later
+
+### User Accounts: Phase 3, Only If There's Traction
 - Phase 3 adds optional "Create account to sync across devices" using Firebase Auth + Firestore
-- This is NOT full SaaS — no payments, no feature gating, just settings sync
-- Estimated: 1-2 sessions of work, added without rewriting anything
-- Anonymous Firebase IDs (auto-generated on first launch, no login required) give user stats from day 1
+- This is NOT full SaaS — no payments, no feature gating, just free account + settings sync
+- Anonymous UUID links to the account on creation (no data loss)
+- Free accounts do NOT require rewriting anything — Firebase Auth bolts on cleanly
+- Cross-device sync via UUID alone is not possible (UUID is per-device) — accounts are the right solution
+- **Do not build this until there's evidence people want it**
+
+### Long-Term Goal: Accounts + Payment Tiers (Phase 4, post-traction only)
+- If the app gets real users, add paid tiers (e.g., cowork for teams, advanced features)
+- Payment processing via Stripe (webhooks, access control — significant work)
+- This is NOT being designed now, but keep it in mind: **do not make architectural decisions that close this door**
+- Firebase Auth + Firestore as the backend foundation makes this path straightforward when the time comes
 
 ### Cowork / Shared Sessions: Phase 2, No Accounts Needed
 - Host clicks "Start shared session" → gets a 6-character room code
@@ -48,44 +64,61 @@ Check this is set before any new code is written.
 - Firebase free tier is sufficient for a growing app (100 simultaneous connections, 1GB data)
 - **No user accounts needed for this feature**
 
+### Distribution & Launch Strategy
+
+**The code signing problem:**
+Without code signing, Windows shows a "Windows protected your PC" SmartScreen block and Mac shows "unidentified developer" — most normal users will not proceed. Code signing costs money:
+- Windows: ~$300–500/year for an OV certificate, OR use the Microsoft Store (free cert, review process)
+- Mac: Apple Developer Program, $99/year — required to sign and notarize
+
+**How to get traction without spending first:**
+1. **Share with tech-adjacent people** — friends, communities (Reddit, Discord, Product Hunt). They know how to bypass the warning. Use this to validate the concept.
+2. **Microsoft Store** — free submission, Microsoft's cert covers signing. Tradeoff: store policies + review process. Legitimate free path for Windows.
+3. **Web version** — already works in browser, deployable to Vercel (free). Loses the forced popup (core value prop) but can validate the timer/mindfulness concept.
+4. **UUID analytics from cowork** — shows real usage data without needing app store downloads.
+
+**Cross-platform (Windows + Mac):**
+- Tauri is cross-platform — same code, same features, both platforms
+- You can only BUILD a Mac installer on a Mac or via GitHub Actions (Mac runner)
+- You are on Windows — Mac builds require GitHub Actions CI/CD (already in plan for launch)
+- Testing Mac requires a Mac or borrowing one — plan for this before public release
+- **Do not block Windows launch waiting for Mac** — ship Windows first, Mac follows
+
+**Distribution milestones:**
+| Milestone | What's needed | Cost |
+|-----------|--------------|------|
+| You test the full app | `dev-tauri.bat` — already works | Free |
+| Share with tech friends (unsigned) | Build unsigned installer | Free |
+| General public (Windows) | Code signing cert OR Microsoft Store | $0–$500/yr |
+| General public (Mac) | Apple Developer account + GitHub Actions | $99/yr |
+
 ---
 
-## Three-Phase Build Plan
+## Build Plan (4 Phases)
 
-### Phase 1: Update web app to match batch file (CURRENT PRIORITY)
-The web app was built in Session 1 (2026-02-13) based on an early version of the batch file.
-The batch file has since had a major Session 3 rewrite (2026-02-24) with significant new features.
-**The web app must be brought up to date BEFORE adding the Tauri wrapper.**
+### Phase 1: Update web app to match batch file — COMPLETE ✅ (Sessions 1–21)
 
-Features missing from the web app (present in batch file Session 3):
-- **Mode-specific defaults:** Separate default settings for each mode (defaultsP / defaultsM / defaultsB)
-  - Mindfulness (M): 15min interval default (must divide evenly into 60min — validated)
-  - Pomodoro (P): 25min work, 0sec dismiss delay (immediately closeable)
-  - Both (B): 25min work, 12.5min prompts (must divide evenly into work session)
-- **Mode-specific presets:** 5 slots per mode (P1-P5, M1-M5, B1-B5 = 15 total)
-  - Load by number, view details with number+V
-  - Auto-generated names based on differences from defaults
-  - Shows available vs occupied slots when saving
-- **Two-level UX flow:** Choose mode first → mode-specific menu with options (not one flat flow)
-- **No auto-display of settings:** Press V anywhere to view current/default settings
-- **Save options after customize:** Start / Save Preset / Save as Default (with confirmation) / View / Back
-- **Session-complete popup:** Larger (500x300 equivalent), detailed stats, auto-dismiss after 60 seconds
-- **Settings storage:** Structured as `{ defaultsP, defaultsM, defaultsB, P1..P5, M1..M5, B1..B5 }`
+### Phase 2: Tauri wrapper + blocking popup + cowork — IN PROGRESS (Sessions 9–22)
+- ✅ Tauri wrapper installed and working
+- ✅ Blocking native popup window (always-on-top)
+- ✅ Window icon set
+- ☐ Settings storage: localStorage → Tauri file system API (AppData) — **NEXT**
+- ☐ Firebase backend: cowork room codes + anonymous UUID install tracking
+- ☐ Test on Windows. Set up GitHub Actions for Mac builds.
+- **Firebase data model must be designed with future accounts in mind (Phase 3)**
 
-Also check: `output: 'export'` in next.config.ts (add if missing).
-
-### Phase 2: Tauri wrapper + blocking popup + cowork
-- Add Tauri to the project (`src-tauri/` folder alongside existing `src/`)
-- Implement blocking native popup window (always-on-top second window)
-- Switch settings storage from localStorage → Tauri file system API (AppData)
-- Add Firebase Realtime Database for cowork session codes
-- Test on Windows. Set up GitHub Actions for Mac builds.
-
-### Phase 3: Optional accounts (if there's traction)
+### Phase 3: Optional accounts (free, only if there's traction)
 - Firebase Auth: optional "Create account" button
-- On account creation: migrate local settings to Firestore
+- On account creation: migrate local UUID + settings to Firestore
 - Settings sync across devices for logged-in users
 - Does NOT gate any features — everything works without an account
+- Only build this if traction data (UUID analytics) shows real usage
+
+### Phase 4: Paid tiers (long-term, only if Phase 3 succeeds)
+- Stripe integration for payment processing
+- Access tiers (e.g., team cowork, advanced features)
+- This is the commercial endgame if the app gets real users
+- Not being designed now — but Firebase/Firestore foundation keeps this path open
 
 ---
 

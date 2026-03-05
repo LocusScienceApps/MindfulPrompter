@@ -9,7 +9,7 @@ Batch files now kill all previous instances (cmd window + exe + port 3000) befor
 
 ---
 
-## Immediate next steps
+## Immediate next steps (Phase 2 remaining)
 
 ### 1. ✅ Items 1–6 all coded and tested — DONE (Sessions 16–21)
 ### 2. ✅ Tauri layout, images, title, icon verified — DONE (Session 22)
@@ -17,9 +17,33 @@ Batch files now kill all previous instances (cmd window + exe + port 3000) befor
 - Keep `localStorage` path for browser dev; use Tauri file API when `isTauri()`
 - Add Export/Import settings buttons
 - Key: `mindful-prompter-v2`
-### 4. Cowork: Firebase Realtime Database for shared session codes
-- Host generates 6-char room code; guests enter it
-- Everyone receives same timer events in real-time; ephemeral (nothing persisted)
+### 4. Firebase backend: cowork + anonymous UUID tracking
+- On first launch: generate UUID, store in AppData, send with all Firebase calls
+- Cowork: host generates 6-char room code; guests enter it
+- Everyone receives same timer events in real-time; ephemeral (nothing persisted after session)
+- UUID gives: install count, usage frequency, retention — no personal data, GDPR-friendly
+- **Design Firestore data model to be account-aware** (accounts come in Phase 3 if there's traction)
+### 5. Distribution prep (before public launch)
+- Build unsigned installer — share with tech-adjacent testers
+- Decide: Microsoft Store submission (free signing) vs. paid OV certificate (~$300–500/yr)
+- Set up GitHub Actions for Mac builds (required — cannot build Mac on Windows)
+- Get Apple Developer account ($99/yr) when ready to target Mac users
+
+---
+
+## Long-term roadmap (post-launch, contingent on traction)
+
+### Phase 3: Free user accounts (only if usage data shows demand)
+- Firebase Auth: optional "Create account" button
+- Settings sync across devices for logged-in users
+- Nothing gated — free accounts only
+- UUID migrates to account on signup (no data loss)
+
+### Phase 4: Paid tiers (only if Phase 3 has real users)
+- Stripe payment processing
+- Access tiers (e.g., team cowork, advanced features)
+- This is the commercial endgame
+- **Not being designed now** — but Firebase foundation keeps this path open
 
 ---
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Settings, SessionStats } from '@/lib/types';
-import { formatDuration } from '@/lib/format';
+import { formatSummaryTime } from '@/lib/format';
 import Button from '../ui/Button';
 
 const AUTO_DISMISS_SECONDS = 60;
@@ -45,7 +45,6 @@ export default function SessionComplete({
   const { mode } = settings;
   const showPomoStats = (mode === 'pomodoro' || mode === 'both') && stats && stats.sessionsCompleted > 0;
   const showPromptStats = (mode === 'mindfulness' || mode === 'both') && stats && stats.promptsCompleted > 0;
-  const elapsedMinutes = stats ? stats.totalElapsedSeconds / 60 : 0;
 
   return (
     <div className="space-y-8 text-center">
@@ -82,7 +81,7 @@ export default function SessionComplete({
                 {stats.totalWorkMinutes > 0 && (
                   <StatRow
                     label="Total work time"
-                    value={formatDuration(stats.totalWorkMinutes)}
+                    value={formatSummaryTime(stats.totalWorkMinutes * 60)}
                   />
                 )}
               </>
@@ -93,10 +92,10 @@ export default function SessionComplete({
                 value={String(stats.promptsCompleted)}
               />
             )}
-            {elapsedMinutes > 0 && (
+            {stats.totalElapsedSeconds > 0 && (
               <StatRow
                 label="Total elapsed"
-                value={formatDuration(elapsedMinutes)}
+                value={formatSummaryTime(stats.totalElapsedSeconds)}
               />
             )}
           </dl>

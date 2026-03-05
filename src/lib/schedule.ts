@@ -1,5 +1,5 @@
 import type { Settings, TimerEvent, MindfulnessScope } from './types';
-import { formatNum, formatDuration } from './format';
+import { formatNum, formatSummaryTime } from './format';
 
 /**
  * Compute the full schedule of events from settings.
@@ -67,8 +67,7 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
   // Finite session: session_complete fires at the Nth interval — it IS the Nth prompt.
   // Shows the mindfulness prompt + counter "Prompt N of N" + session summary below.
   if (s.promptCount > 0) {
-    const totalMin = (count * intervalSec) / 60;
-    const timeStr = formatDuration(totalMin);
+    const timeStr = formatSummaryTime(count * intervalSec);
     events.push({
       offsetSeconds: count * intervalSec,
       type: 'session_complete',
@@ -245,10 +244,7 @@ function computePomodoroSchedule(s: Settings, includeMindfulness: boolean): Time
 
       if (isLastPeriodOfSet && isLastSet) {
         // Session complete
-        const totalMin = offset / 60;
-        const hours = Math.floor(totalMin / 60);
-        const mins = Math.round(totalMin % 60);
-        const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        const timeStr = formatSummaryTime(offset);
 
         events.push({
           offsetSeconds: offset,

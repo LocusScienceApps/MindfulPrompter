@@ -11,20 +11,33 @@ export function formatNum(val: number): string {
 }
 
 /**
- * Format a duration in minutes for display.
- * < 1 min → "30s", 1-59 → "5m", 60+ → "1h 5m"
- * Ported from MindfulnessPrompter.bat Format-Duration
+ * Format a duration (in seconds) for summary displays — popup bodies and stat screens.
+ *   < 60s           → "45 sec"
+ *   60s – 59m 59s   → "1 min, 12 sec"  (omits ", 0 sec")
+ *   60m+            → "1 hr, 40 min"   (drops seconds, rounds to nearest min)
+ *
+ * Do NOT use this for live countdown timers — use formatCountdown for those.
  */
-export function formatDuration(totalMinutes: number): string {
-  if (totalMinutes < 1) {
-    const secs = Math.round(totalMinutes * 60);
-    return `${secs} second${secs !== 1 ? 's' : ''}`;
+export function formatSummaryTime(totalSeconds: number): string {
+  const secs = Math.round(totalSeconds);
+  if (secs < 60) {
+    return `${secs} sec`;
   }
-  const hours = Math.floor(totalMinutes / 60);
-  const mins = Math.round(totalMinutes % 60);
-  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h`;
-  return `${mins}m`;
+  if (secs < 3600) {
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    return remSecs > 0 ? `${mins} min, ${remSecs} sec` : `${mins} min`;
+  }
+  // 1 hour+: drop seconds, round to nearest minute
+  const hrs = Math.floor(secs / 3600);
+  const remMins = Math.round((secs % 3600) / 60);
+  const hrsLabel = hrs === 1 ? 'hr' : 'hrs';
+  return remMins > 0 ? `${hrs} ${hrsLabel}, ${remMins} min` : `${hrs} ${hrsLabel}`;
+}
+
+/** @deprecated Use formatSummaryTime(seconds) instead. Kept for reference. */
+export function formatDuration(totalMinutes: number): string {
+  return formatSummaryTime(totalMinutes * 60);
 }
 
 /**

@@ -78,7 +78,59 @@ export type Screen =
   | 'settings-updated'
   | 'scheduled-start'
   | 'timer'
-  | 'session-complete';
+  | 'session-complete'
+  | 'cowork-select'
+  | 'cowork-setup'
+  | 'cowork-join';
+
+// ── Cowork types ────────────────────────────────────────────────────────────
+
+export type CoworkDay = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
+
+/** How a guest wants to experience a cowork session */
+export type GuestContentMode = 'pomodoro-only' | 'own-prompts' | 'host-prompts';
+
+/** Recurring session schedule rule */
+export interface RecurrenceRule {
+  days: CoworkDay[];
+  time: string;           // "HH:MM" 24-hour format
+  timezone: string;       // IANA timezone, e.g. "America/New_York"
+  durationMinutes: number;
+}
+
+/** Timing parameters shared to all cowork participants */
+export interface CoworkTimingSettings {
+  workMinutes: number;
+  breakMinutes: number;
+  sessionsPerSet: number;
+  multipleSets: boolean;
+  longBreakMinutes: number;
+  numberOfSets: number;
+  hardBreak: boolean;
+  playSound: boolean;
+}
+
+/** A cowork room stored in Firebase */
+export interface CoworkRoom {
+  code: string;
+  hostUid: string;
+  type: 'public' | 'private';
+  name?: string;
+  /** Unix ms timestamp — for one-time sessions */
+  startTime?: number;
+  /** For recurring sessions */
+  recurrenceRule?: RecurrenceRule;
+  timingSettings: CoworkTimingSettings;
+  sharePrompts: boolean;
+  promptSettings?: {
+    promptText: string;
+    promptIntervalMinutes: number;
+    dismissSeconds: number;
+    promptCount: number;
+    bothMindfulnessScope: MindfulnessScope;
+  };
+  createdAt: number;
+}
 
 /** Preset slot key — P/M/B + slot number 1-5 */
 export type PresetSlot =

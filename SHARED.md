@@ -400,6 +400,113 @@ public/
 
 ---
 
+### Session 24 — 2026-03-05 (wmben PC — cowork feature: Firebase rooms, host/guest flows, Timer sync)
+
+**What was done:**
+
+**Firebase setup:**
+- Created Firebase project "MindfulPrompter" (Spark plan, free)
+- Enabled Realtime Database (US region, test mode)
+- Enabled Anonymous Auth (no accounts needed — just a device UID)
+- Registered web app → got config → stored in `.env.local` (gitignored)
+- Installed `firebase` npm package
+
+**New files:**
+- `src/lib/firebase.ts` — Firebase init (idempotent via `getApps()`), anonymous auth, exports `db` and `auth`
+- `src/lib/cowork.ts` — all room logic:
+  - `createRoom()` / `getRoom()` / `subscribeToRoom()` / `deleteRoom()`
+  - `generateUniqueCode()` — 6-char alphanumeric (unambiguous charset, collision-checked)
+  - `computeRoomTiming()` — returns `{ startMs, isActive, isFuture, elapsedMs, nextStartMs }` for one-time and recurring rooms
+  - `computeMostRecentOccurrence()` / `computeNextOccurrence()` — timezone-aware (Intl API)
+  - `buildGuestSettings()` — builds a `Settings` object for Timer from room + guest content mode
+  - `buildHostSettings()` — applies room timing to host's personal settings
+  - `computeSessionDurationMs()` — computes total session length from timing settings
+- `src/components/screens/CoworkSetup.tsx` — host flow: configure timing, choose one-time/recurring schedule, share-prompts toggle, create room → show code → join as host
+- `src/components/screens/CoworkJoin.tsx` — guest flow: enter code, see room status (countdown / active / ended), choose content mode (pomodoro-only / own prompts / host prompts), join
+
+**Modified files:**
+- `src/lib/types.ts` — added `CoworkDay`, `GuestContentMode`, `RecurrenceRule`, `CoworkTimingSettings`, `CoworkRoom`; added `'cowork-setup' | 'cowork-join'` to `Screen` type
+- `src/components/screens/Timer.tsx` — added `coworkStartTime?: number` prop; uses it as `startTimeRef` initial value; pre-populates `firedSet` for late joiners (skips past events silently)
+- `src/components/App.tsx` — added `coworkStartTime` state; `handleCoworkHostStart()` / `handleCoworkGuestStart()` handlers; renders `CoworkSetup` and `CoworkJoin` screens
+- `src/components/screens/ModeSelect.tsx` — added `onCoworkHost` / `onCoworkJoin` props; added "Host a session" / "Join a session" button row below mode cards
+
+**Architecture — key design decisions:**
+- **Sync the clock, not the timer.** Firebase stores `startTime` (Unix ms) + settings. Each client runs `computeSchedule()` locally, computes `elapsed = now - startTime`. Session runs without host being present.
+- **Two sharing layers.** Timing always shared. Content (mindfulness prompts) is guest's independent choice: pomodoro-only / own saved prompts / host's prompts (if host enabled sharing).
+- **Recurring sessions.** Store a `RecurrenceRule` (days + time + timezone + duration). Clients compute the current/next occurrence locally — no server resets, no Cloud Functions needed.
+- **Late join.** `firedSet` pre-populated with all past events on Timer mount. Guest sees correct position immediately with no popup flood.
+- **Web companion.** The existing Next.js app deployed to Vercel = instant web access for guests. No extra dev work. Web guests get CSS overlay popups (less blocking than Tauri desktop but works for timer sync).
+
+**Current state:**
+- Build passes clean (`npm run build`, `npx tsc --noEmit`)
+- Code written and committed, **NOT YET TESTED**
+- Firebase project exists and is configured; `.env.local` in place
+- Need to complete Firebase security rules before sharing publicly
+
+**Next steps for AI (start here next session):**
+
+**STEP 1 — Firebase Realtime Database security rules (do this first, takes 5 min):**
+1. Go to Firebase Console → Realtime Database → Rules tab
+2. Replace the default rules with:
+```json
+{
+  "rules": {
+    "rooms": {
+      "$code": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid)"
+      }
+    }
+  }
+}
+```
+3. Click Publish
+
+**STEP 2 — Test cowork in browser:**
+1. Run `dev-browser.bat`
+2. On ModeSelect, click "Host a session"
+3. Configure: 1-min work, 30-sec break, 2 sessions, start immediately
+4. Click "Create Room" → should see 6-char code
+5. Click "Join as Host" → timer should start
+6. Open a second browser tab to `localhost:3000`
+7. Click "Join a session", enter the code
+8. Choose "Pomodoro only" → click "Join Session"
+9. Verify both tabs run in sync (break popup fires at same time in both)
+10. Test late join: wait 30 sec into session, then join from a third tab — should jump to correct position
+
+**STEP 3 — Test recurring sessions:**
+1. Host → Recurring → set today's weekday, time = 2 minutes from now, timezone = your tz
+2. Create room, get code
+3. Guest joins → should show countdown → auto-joins when time arrives
+
+**STEP 4 — Test sharing modes:**
+1. Host with "Share my prompts" enabled
+2. Guest joins → should see "Host's prompts" option with the prompt text preview
+3. Guest chooses "My own prompts" → verify their saved prompts fire (not host's)
+4. Guest chooses "Host's prompts" → verify host's exact prompt text fires
+
+**Known gaps / deferred to next session:**
+- Public rooms (browsable directory) not yet built — all rooms currently private (code-required)
+- No room expiry mechanism yet (Firebase rules don't auto-delete old rooms)
+- No "delete my room" UI for the host after they're done
+- Firebase security rules need to be set (see Step 1 above)
+- Web deployment to Vercel not yet done
+
+---
+
+### Session 23 — 2026-03-05 (wmben PC — settings storage migration to Tauri AppData)
+
+**What was done:**
+- Migrated settings persistence from `localStorage` → Tauri `AppData` file (`settings.json`)
+- `storage.ts`: added `isTauri()` branch — reads/writes JSON file via `@tauri-apps/plugin-fs` in Tauri; keeps `localStorage` path for browser dev
+- Added Export/Import settings buttons on ModeSelect screen
+- Export: downloads `mindfulprompter-settings.json` to Downloads
+- Import: file picker → validates JSON → overwrites in-memory cache + persists
+
+**Current state:** All committed and pushed. ✅
+
+---
+
 ### Session 22 — 2026-03-05 (wmben PC — Tauri icon fix)
 
 **What was done:**

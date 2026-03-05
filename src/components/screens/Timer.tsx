@@ -14,6 +14,8 @@ interface TimerProps {
   settings: Settings;
   onSessionComplete: (stats: SessionStats) => void;
   onStop: (stats: SessionStats) => void;
+  /** External start time (ms) for cowork sessions. If omitted, uses Date.now(). */
+  coworkStartTime?: number;
 }
 
 interface LogEntry {
@@ -159,7 +161,7 @@ function sendBrowserNotification(event: TimerEvent) {
   });
 }
 
-export default function Timer({ settings, onSessionComplete, onStop }: TimerProps) {
+export default function Timer({ settings, onSessionComplete, onStop, coworkStartTime }: TimerProps) {
   const [elapsed, setElapsed] = useState(0);
   const [currentEvent, setCurrentEvent] = useState<TimerEvent | null>(null);
   const [log, setLog] = useState<LogEntry[]>([{ time: formatTime(), message: 'Session started' }]);
@@ -167,7 +169,7 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scheduleRef = useRef<TimerEvent[]>([]);
-  const startTimeRef = useRef<number>(Date.now()); // Stable start time across re-mounts
+  const startTimeRef = useRef<number>(coworkStartTime ?? Date.now()); // Stable start time across re-mounts
   const logEndRef = useRef<HTMLDivElement>(null);
   // Use refs for values needed in tick callback to avoid stale closures
   const settingsRef = useRef(settings);
@@ -214,7 +216,16 @@ export default function Timer({ settings, onSessionComplete, onStop }: TimerProp
     const schedule = computeSchedule(settings);
     scheduleRef.current = schedule;
 
+    // Pre-populate firedSet for late-joining cowork sessions — skip past events silently
+    const initialElapsed = (Date.now() - startTimeRef.current) / 1000;
     const firedSet = new Set<number>();
+    if (initialElapsed > 2) {
+      for (let i = 0; i < schedule.length; i++) {
+        if (schedule[i].offsetSeconds <= initialElapsed) {
+          firedSet.add(i);
+        }
+      }
+    }
 
     const tick = () => {
       const now = Date.now();

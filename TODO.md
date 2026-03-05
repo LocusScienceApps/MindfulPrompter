@@ -1,28 +1,51 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — Tauri verification done ✅; settings + cowork remain
+## Status: Phase 2 (Tauri) in progress — Tauri + settings done ✅; cowork coded, needs testing
 
 Items 1–6 coded + tested (Sessions 16–21). Tauri native window verified (Session 22).
+Settings migrated to Tauri AppData (Session 23). Cowork feature coded (Session 24) — NOT YET TESTED.
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 Batch files now kill all previous instances (cmd window + exe + port 3000) before starting fresh.
 
 ---
 
-## Immediate next steps (Phase 2 remaining)
+## Immediate next steps
 
 ### 1. ✅ Items 1–6 all coded and tested — DONE (Sessions 16–21)
 ### 2. ✅ Tauri layout, images, title, icon verified — DONE (Session 22)
-### 3. Settings storage: `localStorage` → Tauri file system API (AppData)
-- Keep `localStorage` path for browser dev; use Tauri file API when `isTauri()`
-- Add Export/Import settings buttons
-- Key: `mindful-prompter-v2`
-### 4. Firebase backend: cowork + anonymous UUID tracking
-- On first launch: generate UUID, store in AppData, send with all Firebase calls
-- Cowork: host generates 6-char room code; guests enter it
-- Everyone receives same timer events in real-time; ephemeral (nothing persisted after session)
-- UUID gives: install count, usage frequency, retention — no personal data, GDPR-friendly
-- **Design Firestore data model to be account-aware** (accounts come in Phase 3 if there's traction)
+### 3. ✅ Settings storage: `localStorage` → Tauri AppData — DONE (Session 23)
+### 4. ⚠️ Cowork feature: coded (Session 24), needs testing + Firebase rules
+See SHARED.md Session 24 for step-by-step test plan.
+
+**First — set Firebase security rules** (5 min, blocks everything else):
+- Firebase Console → Realtime Database → Rules → paste:
+```json
+{
+  "rules": {
+    "rooms": {
+      "$code": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid)"
+      }
+    }
+  }
+}
+```
+
+**Then test** (see SHARED.md Session 24 for full checklist):
+- Host creates room → gets code → joins as host → timer starts
+- Guest enters code → sees room status → chooses content mode → joins in sync
+- Late join: guest joins mid-session → jumps to correct position (no popup flood)
+- Recurring session: set future time → both clients count down → start together
+
+**Deferred cowork features** (add in a follow-up session after core is tested):
+- Public rooms (discoverable browse list)
+- Host "delete room" UI
+- Room auto-expiry mechanism
+- Vercel deployment (web companion for guests)
+- Anonymous UUID analytics (install count / usage tracking)
+
 ### 5. Distribution prep (before public launch)
 - Build unsigned installer — share with tech-adjacent testers
 - Decide: Microsoft Store submission (free signing) vs. paid OV certificate (~$300–500/yr)

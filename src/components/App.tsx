@@ -12,6 +12,10 @@ import SettingsUpdated from './screens/Summary';
 import ScheduledStart from './screens/ScheduledStart';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
+import CoworkSetup from './screens/CoworkSetup';
+import CoworkJoin from './screens/CoworkJoin';
+import type { CoworkRoom } from '@/lib/types';
+import { buildHostSettings } from '@/lib/cowork';
 
 /** Merge factory defaults with any saved custom defaults for the mode. */
 function getSettingsForMode(mode: AppMode): Settings {
@@ -26,6 +30,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(getSettingsForMode('both'));
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [storageReady, setStorageReady] = useState(false);
+  const [coworkStartTime, setCoworkStartTime] = useState<number | null>(null);
 
   useEffect(() => {
     registerServiceWorker();
@@ -107,7 +112,22 @@ export default function App() {
   };
 
   const handleNewSession = () => {
+    setCoworkStartTime(null);
     setScreen('mode-select');
+  };
+
+  const handleCoworkHostStart = (room: CoworkRoom, startMs: number) => {
+    setSettings(buildHostSettings(room, settings));
+    setCoworkStartTime(startMs);
+    setSessionStats(null);
+    setScreen('timer');
+  };
+
+  const handleCoworkGuestStart = (guestSettings: Settings, startMs: number) => {
+    setSettings(guestSettings);
+    setCoworkStartTime(startMs);
+    setSessionStats(null);
+    setScreen('timer');
   };
 
   const handleBack = (target: Screen) => {
@@ -125,7 +145,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        {screen !== 'mode-select' && screen !== 'timer' && (
+        {screen !== 'mode-select' && screen !== 'timer' &&
+         screen !== 'cowork-setup' && screen !== 'cowork-join' && (
           <div className="mb-5">
             <button
               onClick={() => setScreen('mode-select')}
@@ -139,7 +160,11 @@ export default function App() {
           </div>
         )}
         {screen === 'mode-select' && (
-          <ModeSelect onSelect={handleModeSelect} />
+          <ModeSelect
+            onSelect={handleModeSelect}
+            onCoworkHost={() => setScreen('cowork-setup')}
+            onCoworkJoin={() => setScreen('cowork-join')}
+          />
         )}
         {screen === 'defaults-review' && (
           <DefaultsReview
@@ -181,8 +206,22 @@ export default function App() {
         {screen === 'timer' && (
           <Timer
             settings={settings}
+            coworkStartTime={coworkStartTime ?? undefined}
             onSessionComplete={handleSessionEnd}
             onStop={handleSessionEnd}
+          />
+        )}
+        {screen === 'cowork-setup' && (
+          <CoworkSetup
+            currentSettings={settings}
+            onHostStart={handleCoworkHostStart}
+            onBack={() => setScreen('mode-select')}
+          />
+        )}
+        {screen === 'cowork-join' && (
+          <CoworkJoin
+            onGuestStart={handleCoworkGuestStart}
+            onBack={() => setScreen('mode-select')}
           />
         )}
         {screen === 'session-complete' && (

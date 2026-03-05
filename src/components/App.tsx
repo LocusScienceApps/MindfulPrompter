@@ -111,7 +111,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      <div className="mx-auto max-w-lg px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-8">
         {screen !== 'mode-select' && screen !== 'timer' && (
           <div className="mb-5">
             <button

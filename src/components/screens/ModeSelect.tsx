@@ -32,9 +32,9 @@ function Tooltip({ text, href, children }: TooltipProps) {
 
 // ── Image icons ────────────────────────────────────────────────────────────────
 
-function GongIcon() {
+function BowlIcon() {
   return (
-    <img src="/images/gong.png" alt="Gong" className="h-20 w-auto object-contain" />
+    <img src="/images/bowl.png" alt="Meditation bowl" className="h-20 w-auto object-contain" />
   );
 }
 
@@ -44,13 +44,9 @@ function TomatoIcon() {
   );
 }
 
-function BothIcon() {
+function LogoIcon() {
   return (
-    <div className="flex items-center gap-2">
-      <img src="/images/gong.png" alt="Gong" className="h-12 w-auto object-contain" />
-      <span className="text-xl font-light text-gray-500">+</span>
-      <img src="/images/tomato.png" alt="Tomato timer" className="h-12 w-auto object-contain" />
-    </div>
+    <img src="/images/logo.png" alt="Combo mode" className="h-20 w-auto object-contain" />
   );
 }
 
@@ -61,19 +57,19 @@ const modes: { key: AppMode; title: string; description: string; icon: React.Rea
     key: 'mindfulness',
     title: 'Mindfulness Prompts',
     description: 'Timed pop-up reminders that make you stop and reflect.',
-    icon: <GongIcon />,
+    icon: <BowlIcon />,
   },
   {
     key: 'pomodoro',
-    title: 'Pomodoro Timer',
-    description: 'Customizable work periods and breaks.',
+    title: 'Timed Work Sessions',
+    description: 'Pomodoro-style work periods and breaks.',
     icon: <TomatoIcon />,
   },
   {
     key: 'both',
-    title: 'Mindfulness Prompts in Work Sessions',
-    description: 'Mindfulness prompts within your work periods.',
-    icon: <BothIcon />,
+    title: 'Combo Mode: Mindfulness Prompts Embedded in Work Sessions',
+    description: '',
+    icon: <LogoIcon />,
   },
 ];
 
@@ -83,6 +79,9 @@ export default function ModeSelect({ onSelect }: { onSelect: (mode: AppMode) => 
   return (
     <div className="space-y-8">
       <div className="text-center px-2">
+        <div className="flex justify-center mb-3">
+          <img src="/images/logo.png" alt="MindfulPrompter" className="h-16 w-auto" />
+        </div>
         <h1 className="text-3xl font-bold text-gray-900">MindfulPrompter</h1>
         <div className="mt-3 space-y-1">
           <p className="text-base font-medium text-gray-800 leading-snug">
@@ -116,7 +115,7 @@ export default function ModeSelect({ onSelect }: { onSelect: (mode: AppMode) => 
                 <div className="shrink-0">{m.icon}</div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800">{m.title}</h3>
-                  <p className="text-sm text-gray-500">{m.description}</p>
+                  {m.description && <p className="text-sm text-gray-500">{m.description}</p>}
                 </div>
               </div>
             </Card>

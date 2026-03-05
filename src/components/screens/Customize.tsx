@@ -535,7 +535,7 @@ function NumericInput({
     }
     if (raw === '∞') return; // already representing 0; no state change needed
     const parsed = integerOnly ? parseInt(raw, 10) : parseFloat(raw);
-    const atLeast = allowZero ? 0 : (minValue !== undefined ? minValue : (integerOnly ? 1 : 0.5));
+    const atLeast = allowZero ? 0 : (minValue !== undefined ? minValue : (integerOnly ? 1 : 0.01));
     if (!isNaN(parsed) && parsed >= atLeast) {
       onChange(parsed);
       // When user types 0, display as solid ∞ (if default≠0) or gray ∞ placeholder (if default=0)
@@ -547,7 +547,7 @@ function NumericInput({
   // Manual parsing/validation is already in handleChange so type="number" spinners aren't needed.
   const inputType = allowZero ? 'text' : 'number';
   const placeholderText = allowZero && defaultValue === 0 ? '∞' : formatNum(defaultValue);
-  const effectiveMin = minValue !== undefined ? minValue : (integerOnly ? 1 : 0.5);
+  const effectiveMin = minValue !== undefined ? minValue : (integerOnly ? 1 : 0.01);
 
   return (
     <div className="flex items-center gap-3">

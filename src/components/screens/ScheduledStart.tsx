@@ -13,8 +13,8 @@ interface ScheduledStartProps {
 
 const MODE_NAMES: Record<string, string> = {
   mindfulness: 'Mindfulness Prompts',
-  pomodoro: 'Pomodoro Timer',
-  both: 'Both Together',
+  pomodoro: 'Timed Work Sessions',
+  both: 'Combo Mode: Mindfulness Prompts Embedded in Work Sessions',
 };
 
 function getSecondsUntil(timeStr: string): number | null {
@@ -122,7 +122,6 @@ export default function ScheduledStart({ settings, onStart, onBack }: ScheduledS
       <div className="text-center">
         <h2 className="text-2xl font-bold leading-tight">
           <span className="text-indigo-600">{modeName}</span>
-          <span className="text-gray-400 font-normal text-xl"> Mode</span>
         </h2>
         <p className="mt-1 text-gray-500">Schedule a start time</p>
       </div>

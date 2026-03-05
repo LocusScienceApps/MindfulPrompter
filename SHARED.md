@@ -367,6 +367,43 @@ public/
 
 ---
 
+### Session 21 — 2026-03-05 (wmben PC — bug fixes + landing page redesign + logo)
+
+**What was done:**
+
+**NumericInput regression fix (`Customize.tsx`):**
+- Session 20 introduced a bug: changed minimum validation from `parsed > 0` to `parsed >= 0.5` as a side-effect of adding `minValue` prop support. This silently rejected values like 0.1, 0.2, 0.25 for all non-integer fields (work period, break, prompt frequency), reverting them to the default.
+- Fixed: default fallback changed from `0.5` to `0.01` in both `atLeast` and `effectiveMin`. Restores pre-Session-20 behavior (any positive value accepted) while keeping `minValue={0}` override for dismiss delay.
+
+**App max-width increased (`App.tsx`):**
+- Changed `max-w-lg` (512px) to `max-w-2xl` (672px) — prevents awkward text wrapping on desktop-sized windows.
+
+**Landing page text updates (`ModeSelect.tsx` + throughout app):**
+- "Pomodoro Timer" → "Timed Work Sessions" (ModeSelect, Summary, DefaultsReview, ScheduledStart)
+- "Customizable work periods and breaks" → "Pomodoro-style work periods and breaks" (ModeSelect only)
+- "Mindfulness Prompts in Work Sessions" → "Combo Mode: Mindfulness Prompts Embedded in Work Sessions" (all four files; "Both Together" in ScheduledStart also updated)
+- Combo mode subtitle deleted (title is self-explanatory)
+- Removed " Mode" suffix from ALL page headings app-wide (DefaultsReview, ScheduledStart, Summary ×2)
+- "X Mode Settings Updated" → "X Settings Updated"; "Here are your updated X Mode settings:" → "Here are your updated X settings:"
+
+**Landing page image updates (`ModeSelect.tsx`):**
+- Gong replaced with meditation bowl (`bowl.png`, same `h-20` size as tomato)
+- Combo icon (gong + "+" + tomato) replaced with logo (`logo.png`, `h-20`, single image)
+- Logo added above "MindfulPrompter" title on landing page (`h-16`)
+
+**Browser favicon (`src/app/icon.png`):**
+- `logo.png` copied to `src/app/icon.png` — Next.js App Router picks this up automatically as the browser tab icon.
+
+**Current state:**
+- All changes committed and pushed
+- All three modes tested and working
+
+**Next steps:**
+1. Test in Tauri (`dev-tauri.bat`) — verify layout, images, and title changes in native window
+2. Remaining Phase 2: settings storage → Tauri file API; cowork via Firebase
+
+---
+
 ### Session 20 — 2026-03-05 (wmben PC — Items 4/5/6 bug fixes + summary screen redesign)
 
 **What was done:**

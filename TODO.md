@@ -2,7 +2,7 @@
 
 ## Status: Phase 2 (Tauri) in progress — Items 1–6 all done ✅; remaining Phase 2 next
 
-Items 4, 5, 6 coded (Session 19) + bugs found and fixed (Session 20).
+Items 4, 5, 6 coded (Session 19) + bugs fixed (Sessions 20–21).
 All three modes tested in browser and working.
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
@@ -12,9 +12,9 @@ Batch files now kill all previous instances (cmd window + exe + port 3000) befor
 
 ## Immediate next steps
 
-### 1. ✅ Items 1–6 all coded and tested — DONE (Sessions 16–20)
-### 2. Push Session 20 commits to GitHub
-### 3. Test Tauri (`dev-tauri.bat`) — verify summary screen + popup body in native popup
+### 1. ✅ Items 1–6 all coded and tested — DONE (Sessions 16–21)
+### 2. ✅ Session 20 + 21 commits pushed to GitHub
+### 3. Test Tauri (`dev-tauri.bat`) — verify layout, images, title changes in native window
 ### 4. Remaining Phase 2: settings storage → Tauri file API; cowork via Firebase
 
 ---

@@ -17,8 +17,8 @@ interface DefaultsReviewProps {
 
 const MODE_NAMES: Record<string, string> = {
   mindfulness: 'Mindfulness Prompts',
-  pomodoro: 'Pomodoro Timer',
-  both: 'Mindfulness Prompts in Work Sessions',
+  pomodoro: 'Timed Work Sessions',
+  both: 'Combo Mode: Mindfulness Prompts Embedded in Work Sessions',
 };
 
 export default function DefaultsReview({
@@ -99,7 +99,6 @@ export default function DefaultsReview({
       <div className="text-center">
         <h2 className="text-2xl font-bold leading-tight">
           <span className="text-indigo-600">{modeName}</span>
-          <span className="text-gray-400 font-normal text-xl"> Mode</span>
         </h2>
         <p className="mt-1 text-gray-500">Current settings</p>
         {selectedPreset && (

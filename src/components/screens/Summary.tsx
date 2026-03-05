@@ -19,8 +19,8 @@ interface SettingsUpdatedProps {
 
 const MODE_NAMES: Record<string, string> = {
   mindfulness: 'Mindfulness Prompts',
-  pomodoro: 'Pomodoro Timer',
-  both: 'Mindfulness Prompts in Work Sessions',
+  pomodoro: 'Timed Work Sessions',
+  both: 'Combo Mode: Mindfulness Prompts Embedded in Work Sessions',
 };
 
 type SubView = null | 'preset-naming' | 'preset-slots' | 'save-default-confirm';
@@ -245,7 +245,6 @@ export default function SettingsUpdated({
         <div className="text-center">
           <h2 className="text-2xl font-bold leading-tight">
             <span className="text-indigo-600">{modeName}</span>
-            <span className="text-gray-400 font-normal text-xl"> Mode</span>
           </h2>
           <p className="mt-1 text-gray-500">Current settings</p>
           {indicator.slot && indicator.name && (
@@ -395,10 +394,10 @@ export default function SettingsUpdated({
       <div className="text-center">
         <h2 className="text-2xl font-bold leading-tight">
           <span className="text-indigo-600">{modeName}</span>
-          <span className="text-gray-700 font-medium"> Mode Settings Updated</span>
+          <span className="text-gray-700 font-medium"> Settings Updated</span>
         </h2>
         <p className="mt-1 text-gray-500">
-          Here are your updated {modeName} Mode settings:
+          Here are your updated {modeName} settings:
         </p>
       </div>
 

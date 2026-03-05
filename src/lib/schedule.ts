@@ -44,7 +44,11 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
     silent: true,
   });
 
-  for (let i = 1; i <= count; i++) {
+  // For finite sessions: the session_complete IS the final (Nth) prompt, so only
+  // generate N-1 regular mindfulness events. For indefinite: generate all events normally.
+  const lastRegularPrompt = s.promptCount > 0 ? count - 1 : count;
+
+  for (let i = 1; i <= lastRegularPrompt; i++) {
     events.push({
       offsetSeconds: i * intervalSec,
       type: 'mindfulness',
@@ -60,7 +64,8 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
     });
   }
 
-  // If a prompt count was set, add a session_complete event 2 seconds after the last prompt
+  // Finite session: session_complete fires at the Nth interval — it IS the Nth prompt.
+  // Shows the mindfulness prompt + counter "Prompt N of N" + session summary below.
   if (s.promptCount > 0) {
     const totalMin = (count * intervalSec) / 60;
     const hours = Math.floor(totalMin / 60);
@@ -69,16 +74,17 @@ function computeMindfulnessOnlySchedule(s: Settings): TimerEvent[] {
       ? `${hours}h ${mins}m`
       : `${mins} minute${mins !== 1 ? 's' : ''}`;
     events.push({
-      offsetSeconds: count * intervalSec + 2,
+      offsetSeconds: count * intervalSec,
       type: 'session_complete',
       title: 'Session Complete! Great Work!',
       body: `${count} prompt${count !== 1 ? 's' : ''} in ${timeStr}.`,
       promptText: s.promptText,
       setNumber: 0,
-      sessionNumber: count,
+      sessionNumber: count,       // The Nth prompt
       globalSessionNumber: count,
       totalSets: 0,
       periodsPerSet: 0,
+      promptCountTotal: count,    // So counter shows "Prompt N of N"
       dismissSeconds: s.dismissSeconds,
     });
   }

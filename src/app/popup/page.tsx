@@ -206,7 +206,9 @@ export default function PopupPage() {
 
   // Prompt counter: shown only for M-mode mindfulness events.
   // promptCountTotal defined = M-mode (0=indefinite, N=finite); undefined = Both-mode (no counter).
-  const showCounter = eventType === 'mindfulness' && promptCountTotal !== undefined && (sessionNumber ?? 0) > 0;
+  // Show counter on any event that has promptCountTotal defined (M-mode events only).
+  // Includes the final session_complete in M-mode, which IS the Nth prompt.
+  const showCounter = promptCountTotal !== undefined && (sessionNumber ?? 0) > 0;
   const counterText = showCounter
     ? (promptCountTotal > 0 ? `Prompt ${sessionNumber} of ${promptCountTotal}` : `Prompt ${sessionNumber}`)
     : null;

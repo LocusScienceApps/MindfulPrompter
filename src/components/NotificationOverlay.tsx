@@ -88,8 +88,9 @@ export default function NotificationOverlay({
           </p>
         )}
 
-        {/* Prompt counter (M-mode only — promptCountTotal defined: 0=indefinite, N=finite) */}
-        {event.type === 'mindfulness' && event.promptCountTotal !== undefined && event.sessionNumber > 0 && (
+        {/* Prompt counter (M-mode only — promptCountTotal defined: 0=indefinite, N=finite).
+            Shown on any event with promptCountTotal set, including the final session_complete. */}
+        {event.promptCountTotal !== undefined && event.sessionNumber > 0 && (
           <p className="mt-2 text-center text-xs font-medium text-gray-400 uppercase tracking-widest">
             {event.promptCountTotal > 0
               ? `Prompt ${event.sessionNumber} of ${event.promptCountTotal}`

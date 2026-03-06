@@ -1,9 +1,10 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 (Tauri) in progress — Tauri + settings done ✅; cowork coded, needs testing
+## Status: Phase 2 — cowork tested ✅; major app redesign PLANNED, awaiting approval
 
 Items 1–6 coded + tested (Sessions 16–21). Tauri native window verified (Session 22).
-Settings migrated to Tauri AppData (Session 23). Cowork feature coded (Session 24) — NOT YET TESTED.
+Settings migrated to Tauri AppData (Session 23). Cowork tested ✅ (Session 25).
+**Major redesign planned (Session 25) — plan written, not yet approved or implemented.**
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 Batch files now kill all previous instances (cmd window + exe + port 3000) before starting fresh.
@@ -15,8 +16,29 @@ Batch files now kill all previous instances (cmd window + exe + port 3000) befor
 ### 1. ✅ Items 1–6 all coded and tested — DONE (Sessions 16–21)
 ### 2. ✅ Tauri layout, images, title, icon verified — DONE (Session 22)
 ### 3. ✅ Settings storage: `localStorage` → Tauri AppData — DONE (Session 23)
-### 4. ⚠️ Cowork feature: coded (Session 24), needs testing + Firebase rules
-See SHARED.md Session 24 for step-by-step test plan.
+### 4. ✅ Cowork feature: tested and working (Session 25)
+Firebase security rules confirmed and set. Two-tab sync test passed.
+
+### 5. ⏳ MAJOR APP REDESIGN — plan written, needs your approval before any code is written
+
+**NEXT SESSION: Read the plan and approve or modify it before proceeding.**
+
+**To pick up where we left off:**
+> "Read the redesign plan at `C:\Users\wmben\.claude\plans\proud-soaring-lantern.md` and show it to me so I can approve or adjust it before we start coding."
+
+**What the redesign does (summary):**
+- Eliminates the 3-mode system (Mindfulness / Pomodoro / Combo) → unified settings with two toggles: "Timed Work Sessions" on/off and "Mindfulness Prompts" on/off
+- Mode-select landing screen goes away → app lands directly on main settings page
+- Cowork hosting and joining become inline panels on the main page (no separate screens)
+- Scheduling (date+time, recurring) also moves inline on the main page
+- Hosted rooms listed like presets (max 5, with show-code / delete / settings buttons)
+- Improved timezone picker (UTC offset format, filterable by typing)
+- Refresh persistence for cowork sessions (auto-rejoin on page reload)
+- Show-room-code toggle in the Timer screen
+- Storage format bumped to v3; existing presets wiped (pre-launch, acceptable)
+
+**Full plan file:** `C:\Users\wmben\.claude\plans\proud-soaring-lantern.md`
+**Session notes:** SHARED.md Session 25
 
 **First — set Firebase security rules** (5 min, blocks everything else):
 - Firebase Console → Realtime Database → Rules → paste:

@@ -400,6 +400,51 @@ public/
 
 ---
 
+### Session 25 — 2026-03-06 (wmben PC — major app redesign planned, awaiting approval)
+
+**What was done:**
+- Tested cowork feature (Session 24 code) successfully: two-tab test passed ✅
+- Firebase security rules updated in console (rooms + host-rooms paths)
+- Designed a major app redesign — **plan written, not yet implemented**
+
+**Redesign summary:**
+The three-mode system (Mindfulness / Pomodoro / Combo) is being unified into a single settings model. "Timed work sessions" and "mindfulness prompts" become two independent on/off toggles. The mode-select screen goes away. Cowork hosting and joining become inline panels on the main settings page (no separate screens). Scheduling (date+time, recurring) also moves inline. Existing presets will be wiped (pre-launch, acceptable).
+
+**Key architectural changes:**
+- `AppMode` type removed → replaced with `useTimedWork: boolean` + `useMindfulness: boolean` in Settings
+- Storage key bumped to `mindful-prompter-v3`; old presets wiped; single S1–S5 preset namespace
+- Screen type shrinks to 6: `'main' | 'customize' | 'settings-updated' | 'scheduled-start' | 'timer' | 'session-complete'`
+- `CoworkSetup.tsx`, `CoworkJoin.tsx`, `ModeSelect.tsx` deleted — absorbed inline
+- Main settings page gains: hosted rooms list (max 5), inline "Host a Cowork Session" panel, inline "Join a Session" panel, inline scheduling panel
+- Improved timezone picker: shows "UTC−5 — Eastern Time (New York)" format, sorted by offset, filterable by text
+- Cowork hosting: share prompts defaults to ON (opt-out); shares ALL mindfulness settings; code generated inline (no new page); rooms listed like presets
+- Guest join: inline on main page; accepts/edits/rejects host's prompts inline
+- Firebase host-rooms secondary index: `host-rooms/${uid}/${code}` written on room create, cleaned on delete; `getHostRooms()` added to cowork.ts
+- Refresh persistence (localStorage cowork session key) and show-code toggle in Timer are also part of this session's plan
+
+**Status: PLAN WRITTEN, AWAITING USER REVIEW AND APPROVAL**
+Full implementation plan is at: `C:\Users\wmben\.claude\plans\proud-soaring-lantern.md`
+
+**WHAT TO DO NEXT SESSION:**
+1. Read the plan file: `C:\Users\wmben\.claude\plans\proud-soaring-lantern.md`
+2. Show it to the user and ask: "Does this plan look right? Should I proceed with implementation, or do you want to adjust anything?"
+3. Only begin coding after the user explicitly approves the plan
+4. Implementation order (from plan): types.ts → storage.ts → schedule.ts → cowork.ts → App.tsx → Customize.tsx → Main.tsx → SettingsUpdated.tsx → Timer.tsx → ScheduledStart.tsx → delete dead files → Firebase rules update
+
+**Files that will be deleted:**
+- `src/components/screens/ModeSelect.tsx`
+- `src/components/screens/CoworkSetup.tsx`
+- `src/components/screens/CoworkJoin.tsx`
+
+**Files with major rewrites:**
+- `src/lib/types.ts`, `src/lib/storage.ts`, `src/lib/schedule.ts`, `src/lib/cowork.ts`
+- `src/components/App.tsx`
+- `src/components/screens/Customize.tsx` (full rewrite)
+- `src/components/screens/DefaultsReview.tsx` → becomes `Main.tsx` (full rewrite)
+- `src/components/screens/SettingsUpdated.tsx`, `src/components/screens/Timer.tsx`, `src/components/screens/ScheduledStart.tsx`
+
+---
+
 ### Session 24 — 2026-03-05 (wmben PC — cowork feature: Firebase rooms, host/guest flows, Timer sync)
 
 **What was done:**

@@ -1,6 +1,6 @@
 # MindfulPrompter TODO
 
-## Status: Session 27 complete — needs regression testing before Phase 2 resumes
+## Status: Session 28 complete — needs regression testing before Phase 2 resumes
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -45,8 +45,8 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 - [ ] "Start Now" on ScheduledStart screen starts timer immediately
 
 ### D. "When should this session start?" section — Recurring schedule
-- [ ] Select "Repeat on a weekly schedule" → day-picker + time + timezone expand
-- [ ] Select day(s), set time, filter timezone by typing → no crash, correct filtering
+- [ ] Select "Repeat on a weekly schedule" → day-picker + time expand
+- [ ] Select day(s), set time → timezone abbreviation shown inline (e.g. "Prague (UTC+1)")
 - [ ] "Save Schedule" button saves to storage (confirmation message appears)
 - [ ] Navigate away and come back → schedule is still saved (persists across page loads)
 - [ ] Session-start notice banner: set a recurring schedule for "now" (or a time just passed) → banner shows "▶ Your scheduled session started X minutes ago" + "Skip this session" + "→ Join now"
@@ -90,7 +90,7 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 - [ ] Toggle OFF → only "Start Session" button visible in "start now" option
 - [ ] Toggle ON → cowork creation form appears below "When?" section
 - [ ] Cowork ON + "Start session now" → no "Start Session" button in WhenSection; form handles launch
-- [ ] Room name field pre-filled with "Room N"
+- [ ] Room name field pre-filled with a descriptive name (e.g. "Mindfulness every 15m", "25m Pomodoro + mindfulness")
 - [ ] "Share prompts" checkbox visible only when Mindfulness is on
 - [ ] "Generate Room Code" → room created, 6-char code shown; timing set from current startType:
   - startType 'now' → room starts immediately

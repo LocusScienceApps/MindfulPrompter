@@ -499,6 +499,25 @@ Full implementation of the redesign planned in Session 25:
 
 ---
 
+### Session 28 — 2026-03-07 (wmben PC — scheduling UX polish)
+
+**What was done:**
+- `src/components/ui/WhenSection.tsx`: removed timezone picker entirely (both modes now silently use user's local timezone); replaced "Your time zone: Europe/Prague" subtitle with inline timezone label after the time input (shows "CET"/"CEST" if browser provides named abbreviation, otherwise "Prague (UTC+1)" — handles Windows Chromium limitation); `specificDate` now pre-filled with today's date
+- `src/lib/defaults.ts`: added `generateRoomName(settings)` — generates descriptive room names like "Mindfulness every 15m", "25m Pomodoro", "25m Pomodoro + mindfulness" from current settings
+- `src/components/screens/Main.tsx`: room name default uses `generateRoomName` with deduplication (numeric suffix if duplicate names exist); removed now-unused `tzFilter`/`setRecurringTimezone` state
+- `src/components/screens/Summary.tsx`: same `generateRoomName` + today's `specificDate` default; WhenSection call aligned to new props interface
+- Fixed TypeScript mismatch: WhenSection props interface, function destructuring, and all call sites now consistent
+
+**Current state:**
+- All code complete and committed (commit `7a8da39`) — **NEEDS REGRESSION TESTING** (see TODO.md)
+
+**Next steps for AI (start here next session):**
+1. User will test per checklist in TODO.md — fix any bugs found
+2. After all tests pass: migrate settings storage localStorage → Tauri AppData
+3. Then: full Tauri end-to-end test
+
+---
+
 ### Session 27 — 2026-03-07 (wmben PC — scheduling redesign + cowork toggle)
 
 **What was done:**

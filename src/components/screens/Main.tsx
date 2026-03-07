@@ -11,6 +11,7 @@ import {
   computeRoomTiming,
   computeSessionDurationMs,
 } from '@/lib/cowork';
+import { generateRoomName } from '@/lib/defaults';
 import Button from '../ui/Button';
 import SettingsDisplay from '../ui/SettingsDisplay';
 import WhenSection from '../ui/WhenSection';
@@ -129,14 +130,17 @@ export default function Main({
 
   // Scheduling state (unified)
   const [startType, setStartType] = useState<'now' | 'specific' | 'recurring'>('now');
-  const [specificDate, setSpecificDate] = useState('');
+  const [specificDate, setSpecificDate] = useState(() => {
+    const t = new Date();
+    const yyyy = t.getFullYear();
+    const mm = String(t.getMonth() + 1).padStart(2, '0');
+    const dd = String(t.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [specificTime, setSpecificTime] = useState('');
   const [recurringDays, setRecurringDays] = useState<CoworkDay[]>([]);
   const [recurringTime, setRecurringTime] = useState('');
-  const [recurringTimezone, setRecurringTimezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone
-  );
-  const [tzFilter, setTzFilter] = useState('');
+  const [recurringTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [scheduleSaved, setScheduleSaved] = useState(false);
 
   // Hosted rooms
@@ -166,7 +170,11 @@ export default function Main({
     getHostRooms().then((rooms) => {
       setHostedRooms(rooms);
       setHostedRoomsLoaded(true);
-      if (!hostRoomName) setHostRoomName(`Room ${rooms.length + 1}`);
+      if (!hostRoomName) {
+        const baseName = generateRoomName(settings);
+        const dupes = rooms.filter((r) => r.name === baseName).length;
+        setHostRoomName(dupes > 0 ? `${baseName} ${dupes + 1}` : baseName);
+      }
     }).catch(() => {
       setHostedRoomsLoaded(true);
     });
@@ -247,7 +255,7 @@ export default function Main({
         const durationMinutes = computeSessionDurationMs(timingSettings) / 60000;
         roomInput = {
           type: 'public',
-          name: hostRoomName.trim() || `Room ${hostedRooms.length + 1}`,
+          name: hostRoomName.trim() || generateRoomName(settings),
           mindfulnessOnly: !settings.useTimedWork,
           timingSettings,
           sharePrompts: settings.useMindfulness ? hostSharePrompts : false,
@@ -267,7 +275,7 @@ export default function Main({
             : Date.now();
         roomInput = {
           type: 'public',
-          name: hostRoomName.trim() || `Room ${hostedRooms.length + 1}`,
+          name: hostRoomName.trim() || generateRoomName(settings),
           mindfulnessOnly: !settings.useTimedWork,
           timingSettings,
           sharePrompts: settings.useMindfulness ? hostSharePrompts : false,
@@ -530,12 +538,8 @@ export default function Main({
         onSpecificTimeChange={setSpecificTime}
         recurringDays={recurringDays}
         recurringTime={recurringTime}
-        recurringTimezone={recurringTimezone}
-        tzFilter={tzFilter}
         onRecurringDaysChange={setRecurringDays}
         onRecurringTimeChange={setRecurringTime}
-        onRecurringTimezoneChange={setRecurringTimezone}
-        onTzFilterChange={setTzFilter}
         hostCowork={hostCowork}
         onStartNow={onStart}
         onSchedule={onScheduledStart}
@@ -583,7 +587,7 @@ export default function Main({
                   type="text"
                   value={hostRoomName}
                   onChange={(e) => setHostRoomName(e.target.value)}
-                  placeholder={`Room ${hostedRooms.length + 1}`}
+                  placeholder={generateRoomName(settings)}
                   className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
                 />
               </div>

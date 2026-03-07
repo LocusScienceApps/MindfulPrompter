@@ -3,49 +3,30 @@
 import type { CoworkDay } from '@/lib/types';
 import Button from './Button';
 
-// ── Timezone picker data ──────────────────────────────────────────────────────
+// ── Timezone inline label ─────────────────────────────────────────────────────
 
-const IANA_ZONES = [
-  'Pacific/Honolulu', 'America/Anchorage', 'America/Los_Angeles', 'America/Denver',
-  'America/Chicago', 'America/New_York', 'America/Halifax', 'America/St_Johns',
-  'America/Sao_Paulo', 'Atlantic/Azores', 'Europe/London', 'Europe/Paris',
-  'Europe/Helsinki', 'Europe/Moscow', 'Asia/Dubai', 'Asia/Kolkata',
-  'Asia/Dhaka', 'Asia/Bangkok', 'Asia/Shanghai', 'Asia/Tokyo',
-  'Australia/Sydney', 'Pacific/Auckland',
-];
-
-interface TzOption {
-  zone: string;
-  offsetMinutes: number;
-  label: string;
+/**
+ * Returns a human-friendly inline timezone label for display next to a time input.
+ * Prefers a named abbreviation ("CET", "JST") when the browser provides one.
+ * Falls back to "City (UTC+X)" (e.g. "Prague (UTC+1)") on platforms like Windows
+ * where Chromium returns a generic offset instead of a named abbreviation.
+ */
+function getTzInlineLabel(zone: string): string {
+  try {
+    const now = new Date();
+    const shortParts = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' }).formatToParts(now);
+    const abbr = shortParts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+    // Use the abbreviation only if it's a real one (CET, JST, EST…), not a generic offset
+    if (abbr && !abbr.startsWith('GMT') && !abbr.startsWith('UTC')) return abbr;
+    // Fallback: "City (UTC+X)" so users see a recognisable location alongside the offset
+    const offsetParts = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' }).formatToParts(now);
+    const offset = (offsetParts.find((p) => p.type === 'timeZoneName')?.value ?? '').replace('GMT', 'UTC');
+    const city = zone.split('/').pop()?.replace(/_/g, ' ') ?? '';
+    return city ? `${city} (${offset})` : offset;
+  } catch {
+    return '';
+  }
 }
-
-function buildTzOptions(): TzOption[] {
-  const now = new Date();
-  return IANA_ZONES.map((zone) => {
-    try {
-      const formatter = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' });
-      const parts = formatter.formatToParts(now);
-      const offsetStr = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'UTC';
-      const match = offsetStr.match(/GMT([+-])(\d+)(?::(\d+))?/);
-      let offsetMinutes = 0;
-      if (match) {
-        const sign = match[1] === '+' ? 1 : -1;
-        offsetMinutes = sign * (parseInt(match[2], 10) * 60 + parseInt(match[3] ?? '0', 10));
-      }
-      const h = Math.floor(Math.abs(offsetMinutes) / 60);
-      const m = Math.abs(offsetMinutes) % 60;
-      const utcStr = `UTC${offsetMinutes >= 0 ? '+' : '−'}${h}${m ? `:${String(m).padStart(2, '0')}` : ''}`;
-      const cityName = zone.split('/').pop()!.replace(/_/g, ' ');
-      const region = zone.split('/')[0];
-      return { zone, offsetMinutes, label: `${utcStr} — ${region.replace('_', ' ')}: ${cityName}` };
-    } catch {
-      return { zone, offsetMinutes: 0, label: zone };
-    }
-  }).sort((a, b) => a.offsetMinutes - b.offsetMinutes);
-}
-
-const tzOptionsCache: TzOption[] = buildTzOptions();
 
 // ── WhenSection ───────────────────────────────────────────────────────────────
 
@@ -60,12 +41,8 @@ export interface WhenSectionProps {
   // recurring
   recurringDays: CoworkDay[];
   recurringTime: string;
-  recurringTimezone: string;
-  tzFilter: string;
   onRecurringDaysChange: (days: CoworkDay[]) => void;
   onRecurringTimeChange: (v: string) => void;
-  onRecurringTimezoneChange: (v: string) => void;
-  onTzFilterChange: (v: string) => void;
   // actions
   hostCowork: boolean;
   onStartNow: () => void;
@@ -82,24 +59,15 @@ export default function WhenSection({
   onSpecificTimeChange,
   recurringDays,
   recurringTime,
-  recurringTimezone,
-  tzFilter,
   onRecurringDaysChange,
   onRecurringTimeChange,
-  onRecurringTimezoneChange,
-  onTzFilterChange,
   hostCowork,
   onStartNow,
   onSchedule,
   onSaveRecurring,
 }: WhenSectionProps) {
-  const filteredTz = tzFilter
-    ? tzOptionsCache.filter((t) => t.label.toLowerCase().includes(tzFilter.toLowerCase()))
-    : tzOptionsCache;
-
   const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const userTzOption = tzOptionsCache.find((t) => t.zone === userTz);
-  const userTzLabel = userTzOption ? userTzOption.label.split('—')[0].trim() : userTz;
+  const userTzAbbr = getTzInlineLabel(userTz);
 
   const specificMs =
     specificDate && specificTime
@@ -150,7 +118,7 @@ export default function WhenSection({
           </label>
           {startType === 'specific' && (
             <div className="mt-3 ml-6 space-y-3">
-              <div className="flex gap-3 flex-wrap">
+              <div className="flex gap-3 items-center flex-wrap">
                 <input
                   type="date"
                   value={specificDate}
@@ -163,8 +131,10 @@ export default function WhenSection({
                   onChange={(e) => onSpecificTimeChange(e.target.value)}
                   className="rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
                 />
+                {userTzAbbr && (
+                  <span className="text-sm font-medium text-gray-500">{userTzAbbr}</span>
+                )}
               </div>
-              <p className="text-xs text-gray-400">Your time zone: {userTzLabel}</p>
               {specificMs && !hostCowork && (
                 <Button onClick={() => onSchedule(specificMs)} className="w-full">
                   Schedule Session
@@ -218,27 +188,10 @@ export default function WhenSection({
                   onChange={(e) => onRecurringTimeChange(e.target.value)}
                   className="rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
                 />
+                {userTzAbbr && (
+                  <span className="text-sm font-medium text-gray-500">{userTzAbbr}</span>
+                )}
                 <span className="text-sm text-gray-500">each selected day</span>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-600">Time zone</label>
-                <input
-                  type="text"
-                  value={tzFilter}
-                  onChange={(e) => onTzFilterChange(e.target.value)}
-                  placeholder="Filter by city, region, or UTC offset…"
-                  className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-                <select
-                  value={recurringTimezone}
-                  onChange={(e) => onRecurringTimezoneChange(e.target.value)}
-                  className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                  size={5}
-                >
-                  {filteredTz.map((t) => (
-                    <option key={t.zone} value={t.zone}>{t.label}</option>
-                  ))}
-                </select>
               </div>
               {recurringReady && !hostCowork && (
                 <Button onClick={onSaveRecurring} className="w-full">

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Settings, PresetSlot, CoworkRoom, EditContext, CoworkDay } from '@/lib/types';
 import { getPresetSlots, savePreset, listPresets, renamePreset, deletePreset, saveSoloSchedule } from '@/lib/storage';
-import { generatePresetName } from '@/lib/defaults';
+import { generatePresetName, generateRoomName } from '@/lib/defaults';
 import { createRoom, getRoom, computeRoomTiming, computeSessionDurationMs } from '@/lib/cowork';
 import Button from '../ui/Button';
 import SettingsDisplay from '../ui/SettingsDisplay';
@@ -66,7 +66,7 @@ export default function SettingsUpdated({
 
   // Cowork toggle (replaces expandHost)
   const [hostCowork, setHostCowork] = useState(false);
-  const [hostRoomName, setHostRoomName] = useState('Room 1');
+  const [hostRoomName, setHostRoomName] = useState(() => generateRoomName(settings));
   const [hostSharePrompts, setHostSharePrompts] = useState(true);
   const [hostGenerating, setHostGenerating] = useState(false);
   const [hostError, setHostError] = useState('');
@@ -75,7 +75,10 @@ export default function SettingsUpdated({
 
   // Scheduling state (unified, replaces expandSchedule)
   const [startType, setStartType] = useState<'now' | 'specific' | 'recurring'>('now');
-  const [specificDate, setSpecificDate] = useState('');
+  const [specificDate, setSpecificDate] = useState(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  });
   const [specificTime, setSpecificTime] = useState('');
   const [recurringDays, setRecurringDays] = useState<CoworkDay[]>([]);
   const [recurringTime, setRecurringTime] = useState('');
@@ -124,7 +127,7 @@ export default function SettingsUpdated({
         const durationMinutes = computeSessionDurationMs(timingSettings) / 60000;
         roomInput = {
           type: 'public',
-          name: hostRoomName.trim() || 'Room 1',
+          name: hostRoomName.trim() || generateRoomName(localS),
           mindfulnessOnly: !localS.useTimedWork,
           timingSettings,
           sharePrompts: localS.useMindfulness ? hostSharePrompts : false,
@@ -144,7 +147,7 @@ export default function SettingsUpdated({
             : Date.now();
         roomInput = {
           type: 'public',
-          name: hostRoomName.trim() || 'Room 1',
+          name: hostRoomName.trim() || generateRoomName(localS),
           mindfulnessOnly: !localS.useTimedWork,
           timingSettings,
           sharePrompts: localS.useMindfulness ? hostSharePrompts : false,
@@ -212,12 +215,8 @@ export default function SettingsUpdated({
         onSpecificTimeChange={setSpecificTime}
         recurringDays={recurringDays}
         recurringTime={recurringTime}
-        recurringTimezone={recurringTimezone}
-        tzFilter={tzFilter}
         onRecurringDaysChange={setRecurringDays}
         onRecurringTimeChange={setRecurringTime}
-        onRecurringTimezoneChange={setRecurringTimezone}
-        onTzFilterChange={setTzFilter}
         hostCowork={hostCowork}
         onStartNow={onBegin}
         onSchedule={onScheduledStart}

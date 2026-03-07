@@ -93,3 +93,21 @@ export function generatePresetName(settings: Settings): string {
   if (diffs.length === 0) return 'Custom preset';
   return diffs.slice(0, 3).join(', ');
 }
+
+/**
+ * Auto-generate a cowork room name that describes the session type.
+ * Similar in spirit to generatePresetName but tuned for rooms.
+ * Examples: "Mindfulness every 15m", "25m Pomodoro", "25m Pomodoro + mindfulness"
+ */
+export function generateRoomName(settings: Settings): string {
+  if (settings.useTimedWork && settings.useMindfulness) {
+    return `${formatNum(settings.workMinutes)}m Pomodoro + mindfulness`;
+  }
+  if (settings.useTimedWork) {
+    return `${formatNum(settings.workMinutes)}m Pomodoro`;
+  }
+  if (settings.useMindfulness) {
+    return `Mindfulness every ${formatNum(settings.promptIntervalMinutes)}m`;
+  }
+  return 'Session';
+}

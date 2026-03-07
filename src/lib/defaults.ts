@@ -1,66 +1,28 @@
-import type { AppMode, Settings } from './types';
+import type { Settings } from './types';
 import { formatNum } from './format';
 
-/** Default settings for each mode */
-export function getDefaults(mode: AppMode): Settings {
-  const base = {
-    mode,
-    playSound: true,
+/** Factory default settings — unified, no separate modes */
+export function getDefaults(): Settings {
+  return {
+    useTimedWork: true,
+    useMindfulness: true,
+    // Pomodoro defaults
+    workMinutes: 25,
+    breakMinutes: 5,
+    sessionsPerSet: 4,
+    multipleSets: false,
+    longBreakMinutes: 20,
+    numberOfSets: 1,
+    hardBreak: false,
+    // Mindfulness defaults
     promptText: 'Are you doing what you should be doing?',
+    promptIntervalMinutes: 12.5,
     dismissSeconds: 15,
+    promptCount: 0, // 0 = run indefinitely (mindfulness-only mode only)
+    bothMindfulnessScope: 'work-only',
+    // Global
+    playSound: true,
   };
-
-  switch (mode) {
-    case 'mindfulness':
-      return {
-        ...base,
-        // No pomodoro — use placeholder values
-        workMinutes: 0,
-        breakMinutes: 0,
-        sessionsPerSet: 0,
-        multipleSets: false,
-        longBreakMinutes: 0,
-        numberOfSets: 0,
-        // Mindfulness defaults
-        promptIntervalMinutes: 15,
-        promptCount: 0, // 0 = run indefinitely
-      };
-
-    case 'pomodoro':
-      return {
-        ...base,
-        // Pomodoro defaults
-        workMinutes: 25,
-        breakMinutes: 5, // 25 / 5
-        sessionsPerSet: 4,
-        multipleSets: false,
-        longBreakMinutes: 20, // 4 * 5
-        numberOfSets: 1,
-        hardBreak: false,
-        // No mindfulness — use placeholder values
-        promptIntervalMinutes: 0,
-        promptText: '',
-        dismissSeconds: 0,
-        promptCount: 0,
-      };
-
-    case 'both':
-      return {
-        ...base,
-        // Pomodoro defaults
-        workMinutes: 25,
-        breakMinutes: 5,
-        sessionsPerSet: 4,
-        multipleSets: false,
-        longBreakMinutes: 20,
-        numberOfSets: 1,
-        hardBreak: false,
-        // Mindfulness defaults (interval = work / 2)
-        promptIntervalMinutes: 12.5,
-        promptCount: 0,
-        bothMindfulnessScope: 'work-only' as const,
-      };
-  }
 }
 
 /**
@@ -78,7 +40,7 @@ export function defaultLongBreakMinutes(breakMinutes: number): number {
 }
 
 /**
- * Compute the derived default for prompt interval: work / 2 (mode c only)
+ * Compute the derived default for prompt interval in hybrid mode: work / 2
  */
 export function defaultPromptInterval(workMinutes: number): number {
   return workMinutes / 2;
@@ -96,35 +58,37 @@ function roundToSecond(minutes: number): number {
  * Auto-generate a preset name by comparing settings to factory defaults.
  * Describes the first 3 differences, e.g. "45m work, 10m break, 2 sessions".
  * Returns "Custom preset" if there are no differences.
- * Ported from MindfulnessPrompter.bat Generate-PresetName
  */
-export function generatePresetName(mode: AppMode, settings: Settings): string {
-  const factory = getDefaults(mode);
+export function generatePresetName(settings: Settings): string {
+  const factory = getDefaults();
   const diffs: string[] = [];
 
-  if (mode === 'pomodoro' || mode === 'both') {
+  if (settings.useTimedWork) {
     if (settings.workMinutes !== factory.workMinutes)
       diffs.push(`${formatNum(settings.workMinutes)}m work`);
     if (settings.breakMinutes !== factory.breakMinutes)
       diffs.push(`${formatNum(settings.breakMinutes)}m break`);
     if (settings.sessionsPerSet !== factory.sessionsPerSet)
-      diffs.push(`${settings.sessionsPerSet} sessions`);
+      diffs.push(`${settings.sessionsPerSet} periods`);
     if (settings.multipleSets && !factory.multipleSets)
       diffs.push(`${settings.numberOfSets} sets`);
   }
 
-  if (mode === 'mindfulness' || mode === 'both') {
+  if (settings.useMindfulness) {
     if (settings.promptText !== factory.promptText)
       diffs.push('custom prompt');
     if (settings.promptIntervalMinutes !== factory.promptIntervalMinutes)
       diffs.push(`every ${formatNum(settings.promptIntervalMinutes)}m`);
     if (settings.dismissSeconds !== factory.dismissSeconds)
       diffs.push(`${settings.dismissSeconds}s delay`);
-    if (mode === 'mindfulness' && settings.promptCount > 0)
+    if (!settings.useTimedWork && settings.promptCount > 0)
       diffs.push(`${settings.promptCount} prompts`);
-    if (mode === 'both' && settings.bothMindfulnessScope && settings.bothMindfulnessScope !== 'work-only')
-      diffs.push(`prompt scope: ${settings.bothMindfulnessScope}`);
   }
+
+  if (!settings.useTimedWork && settings.useMindfulness)
+    diffs.push('mindfulness only');
+  if (settings.useTimedWork && !settings.useMindfulness)
+    diffs.push('timed work only');
 
   if (diffs.length === 0) return 'Custom preset';
   return diffs.slice(0, 3).join(', ');

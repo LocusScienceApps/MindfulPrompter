@@ -5,7 +5,7 @@ import { ref, set, get, onValue, remove } from 'firebase/database';
 import { db, ensureAuth } from './firebase';
 import type { CoworkRoom, CoworkTimingSettings, GuestContentMode, RecurrenceRule, Settings } from './types';
 import { getDefaults } from './defaults';
-import { getDefaultsForMode } from './storage';
+import { getDefaults as getStoredDefaults } from './storage';
 
 // ── Room codes ──────────────────────────────────────────────────────────────
 
@@ -46,6 +46,12 @@ export async function createRoom(input: NewRoomInput): Promise<string> {
   };
 
   await set(ref(db, `rooms/${code}`), room);
+  // Write host-rooms index for fast "my rooms" lookup
+  await set(ref(db, `host-rooms/${uid}/${code}`), {
+    createdAt: room.createdAt,
+    name: room.name ?? null,
+    timingSettings: room.timingSettings,
+  });
   return code;
 }
 
@@ -75,6 +81,23 @@ export async function deleteRoom(code: string): Promise<void> {
   if (!room) return;
   if (room.hostUid !== uid) throw new Error('Only the host can delete this room.');
   await remove(ref(db, `rooms/${code}`));
+  // Clean host-rooms index
+  await remove(ref(db, `host-rooms/${uid}/${code}`));
+}
+
+/** Get all rooms hosted by the current user (up to 5). */
+export async function getHostRooms(): Promise<CoworkRoom[]> {
+  const uid = await ensureAuth();
+  const indexSnap = await get(ref(db, `host-rooms/${uid}`));
+  if (!indexSnap.exists()) return [];
+
+  const codes = Object.keys(indexSnap.val() as Record<string, unknown>);
+  const rooms: CoworkRoom[] = [];
+  for (const code of codes) {
+    const room = await getRoom(code);
+    if (room) rooms.push(room);
+  }
+  return rooms.slice(0, 5);
 }
 
 // ── Timezone helpers ────────────────────────────────────────────────────────
@@ -247,8 +270,11 @@ export function buildGuestSettings(
   guestMode: GuestContentMode,
 ): Settings {
   const t = room.timingSettings;
+  const factory = getDefaults();
+  const saved = getStoredDefaults();
 
   const timing: Partial<Settings> = {
+    useTimedWork: !room.mindfulnessOnly,
     workMinutes: t.workMinutes,
     breakMinutes: t.breakMinutes,
     sessionsPerSet: t.sessionsPerSet,
@@ -259,22 +285,21 @@ export function buildGuestSettings(
     playSound: t.playSound,
   };
 
-  if (guestMode === 'pomodoro-only') {
-    return { ...getDefaults('pomodoro'), ...timing, mode: 'pomodoro' };
+  if (guestMode === 'no-prompts') {
+    return { ...factory, ...timing, useMindfulness: false };
   }
 
   if (guestMode === 'own-prompts') {
-    const base = getDefaults('both');
-    const saved = getDefaultsForMode('both') ?? {};
-    return { ...base, ...saved, ...timing, mode: 'both' };
+    // Use guest's own saved prompt settings merged on top of factory defaults
+    return { ...factory, ...saved, ...timing, useMindfulness: true };
   }
 
   // host-prompts (only available when room.sharePrompts === true)
   const p = room.promptSettings!;
   return {
-    ...getDefaults('both'),
+    ...factory,
     ...timing,
-    mode: 'both',
+    useMindfulness: true,
     promptText: p.promptText,
     promptIntervalMinutes: p.promptIntervalMinutes,
     dismissSeconds: p.dismissSeconds,
@@ -288,6 +313,7 @@ export function buildHostSettings(room: CoworkRoom, currentSettings: Settings): 
   const t = room.timingSettings;
   return {
     ...currentSettings,
+    useTimedWork: !room.mindfulnessOnly,
     workMinutes: t.workMinutes,
     breakMinutes: t.breakMinutes,
     sessionsPerSet: t.sessionsPerSet,

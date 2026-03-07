@@ -2,17 +2,17 @@
 // App-wide TypeScript types
 // ============================================================
 
-/** The three usage modes */
-export type AppMode = 'mindfulness' | 'pomodoro' | 'both';
-
-/** Controls which popups show the mindfulness prompt in Both mode */
+/** Controls which popups show the mindfulness prompt in hybrid sessions */
 export type MindfulnessScope = 'work-only' | 'breaks' | 'work-starts' | 'all';
 
-/** All configurable settings */
+/** All configurable settings — unified, no separate modes */
 export interface Settings {
-  mode: AppMode;
+  /** If true: run a pomodoro timer. If false: mindfulness-only (prompt interval timing only). */
+  useTimedWork: boolean;
+  /** If true: show mindfulness prompts. If false: timed-work only. At least one must be true. */
+  useMindfulness: boolean;
 
-  // Pomodoro settings (modes: pomodoro, both)
+  // Pomodoro settings (used when useTimedWork === true)
   workMinutes: number;
   breakMinutes: number;
   sessionsPerSet: number;
@@ -20,18 +20,18 @@ export interface Settings {
   longBreakMinutes: number;
   numberOfSets: number;
 
-  // Mindfulness settings (modes: mindfulness, both)
+  // Mindfulness settings (used when useMindfulness === true)
   promptText: string;
   promptIntervalMinutes: number;
   dismissSeconds: number;
-  /** M-mode only: number of prompts before session ends. 0 = run indefinitely. */
+  /** Mindfulness-only: number of prompts before session ends. 0 = run indefinitely. */
   promptCount: number;
-  /** Both mode only: which popup types show the mindfulness prompt. Default: 'work-only'. */
+  /** Hybrid (timed + mindfulness): which popup types show the prompt. Default: 'work-only'. */
   bothMindfulnessScope?: MindfulnessScope;
 
   // Global
   playSound: boolean;
-  /** P and B modes only: if true, break popups fill the full break duration and cannot be dismissed early. */
+  /** When true, break popups fill the full break duration and cannot be dismissed early. */
   hardBreak?: boolean;
 }
 
@@ -56,7 +56,7 @@ export interface TimerEvent {
   autoClose?: boolean;
   /** If true, don't show a popup/notification for this event (e.g., initial session start) */
   silent?: boolean;
-  /** M-mode only: total number of prompts in this session. 0 or undefined = indefinite. */
+  /** Mindfulness-only: total number of prompts in this session. 0 or undefined = indefinite. */
   promptCountTotal?: number;
 }
 
@@ -72,23 +72,19 @@ export type WorkerCommand =
 
 /** Which screen is currently shown */
 export type Screen =
-  | 'mode-select'
-  | 'defaults-review'
+  | 'main'
   | 'customize'
   | 'settings-updated'
   | 'scheduled-start'
   | 'timer'
-  | 'session-complete'
-  | 'cowork-select'
-  | 'cowork-setup'
-  | 'cowork-join';
+  | 'session-complete';
 
 // ── Cowork types ────────────────────────────────────────────────────────────
 
 export type CoworkDay = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 
 /** How a guest wants to experience a cowork session */
-export type GuestContentMode = 'pomodoro-only' | 'own-prompts' | 'host-prompts';
+export type GuestContentMode = 'no-prompts' | 'own-prompts' | 'host-prompts';
 
 /** Recurring session schedule rule */
 export interface RecurrenceRule {
@@ -116,6 +112,8 @@ export interface CoworkRoom {
   hostUid: string;
   type: 'public' | 'private';
   name?: string;
+  /** Whether the host session is mindfulness-only (no timed work) */
+  mindfulnessOnly?: boolean;
   /** Unix ms timestamp — for one-time sessions */
   startTime?: number;
   /** For recurring sessions */
@@ -132,24 +130,18 @@ export interface CoworkRoom {
   createdAt: number;
 }
 
-/** Preset slot key — P/M/B + slot number 1-5 */
-export type PresetSlot =
-  | 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
-  | 'M1' | 'M2' | 'M3' | 'M4' | 'M5'
-  | 'B1' | 'B2' | 'B3' | 'B4' | 'B5';
+/** Preset slot key — S1–S5 (unified, no mode prefix) */
+export type PresetSlot = 'S1' | 'S2' | 'S3' | 'S4' | 'S5';
 
 /** A saved preset */
 export interface Preset {
   name: string;
-  mode: AppMode;
   settings: Settings;
 }
 
 /** The full persisted settings file structure */
 export interface SettingsFile {
-  defaultsP?: Partial<Settings>;
-  defaultsM?: Partial<Settings>;
-  defaultsB?: Partial<Settings>;
+  defaults?: Partial<Settings>;
   presets: Partial<Record<PresetSlot, Preset>>;
 }
 
@@ -160,4 +152,12 @@ export interface SessionStats {
   promptsCompleted: number;
   totalWorkMinutes: number;
   totalElapsedSeconds: number;
+}
+
+/** Persisted cowork session for auto-rejoin on page refresh */
+export interface PersistedCoworkSession {
+  roomCode: string;
+  role: 'host' | 'guest';
+  contentMode: GuestContentMode;
+  startMs: number;
 }

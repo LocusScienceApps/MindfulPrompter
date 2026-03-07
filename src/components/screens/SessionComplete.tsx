@@ -17,8 +17,7 @@ export default function SessionComplete({
   onStartAgain,
   onNewSession,
 }: SessionCompleteProps) {
-  const { mode } = settings;
-  const isPomoMode = mode === 'pomodoro' || mode === 'both';
+  const isPomoMode = settings.useTimedWork;
 
   return (
     <div className="space-y-8 text-center">

@@ -6,15 +6,10 @@ import { formatNum, formatSummaryTime } from './format';
  * Returns a flat array of TimerEvents sorted by offsetSeconds.
  */
 export function computeSchedule(settings: Settings): TimerEvent[] {
-  const { mode } = settings;
-
-  if (mode === 'mindfulness') {
+  if (!settings.useTimedWork) {
     return computeMindfulnessOnlySchedule(settings);
   }
-  if (mode === 'pomodoro') {
-    return computePomodoroSchedule(settings, false);
-  }
-  return computePomodoroSchedule(settings, true);
+  return computePomodoroSchedule(settings, settings.useMindfulness);
 }
 
 /**

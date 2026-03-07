@@ -16,6 +16,12 @@ interface TimerProps {
   onStop: (stats: SessionStats) => void;
   /** External start time (ms) for cowork sessions. If omitted, uses Date.now(). */
   coworkStartTime?: number;
+  /** Room code for cowork sessions — enables "Show room code" toggle. */
+  coworkRoomCode?: string;
+  /** True if the current user is the host (shows "End for everyone" option). */
+  isCoworkHost?: boolean;
+  /** Called when the host chooses to leave AND end the session for all guests. */
+  onHostEndSession?: () => void;
 }
 
 interface LogEntry {
@@ -36,7 +42,7 @@ function formatTime(): string {
 function getCurrentPhase(
   elapsed: number,
   schedule: TimerEvent[],
-  mode: Settings['mode']
+  useTimedWork: boolean,
 ): {
   phase: string;
   phaseLabel: string;
@@ -84,7 +90,7 @@ function getCurrentPhase(
     case 'work_start':
     case 'mindfulness':
       phase = 'work';
-      phaseLabel = mode === 'mindfulness' ? 'Running' : 'Working';
+      phaseLabel = useTimedWork ? 'Working' : 'Running';
       break;
     case 'short_break':
       phase = 'break';
@@ -100,8 +106,8 @@ function getCurrentPhase(
       break;
   }
 
-  // Context info — only show set/period for pomodoro modes
-  if (mode !== 'mindfulness' && lastFired.setNumber > 0) {
+  // Context info — only show set/period for timed work modes
+  if (useTimedWork && lastFired.setNumber > 0) {
     const { setNumber, sessionNumber, totalSets, periodsPerSet } = lastFired;
 
     if (totalSets > 1) {
@@ -126,7 +132,7 @@ function getCurrentPhase(
   // Next event countdown
   if (nextEvent) {
     if (phase === 'work' || phase === 'waiting') {
-      if (mode === 'mindfulness') {
+      if (!useTimedWork) {
         contextLines.push(`Next prompt in ${formatCountdown(timeLeft)}`);
       } else if (nextEvent.type === 'mindfulness') {
         contextLines.push(`Next prompt in ${formatCountdown(timeLeft)}`);
@@ -161,11 +167,13 @@ function sendBrowserNotification(event: TimerEvent) {
   });
 }
 
-export default function Timer({ settings, onSessionComplete, onStop, coworkStartTime }: TimerProps) {
+export default function Timer({ settings, onSessionComplete, onStop, coworkStartTime, coworkRoomCode, isCoworkHost, onHostEndSession }: TimerProps) {
   const [elapsed, setElapsed] = useState(0);
   const [currentEvent, setCurrentEvent] = useState<TimerEvent | null>(null);
   const [log, setLog] = useState<LogEntry[]>([{ time: formatTime(), message: 'Session started' }]);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [showRoomCode, setShowRoomCode] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scheduleRef = useRef<TimerEvent[]>([]);
@@ -342,7 +350,7 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
   };
 
   const { phase, phaseLabel, phaseProgress, timeLeft, contextLines, detailLine } =
-    getCurrentPhase(elapsed, scheduleRef.current, settings.mode);
+    getCurrentPhase(elapsed, scheduleRef.current, settings.useTimedWork);
 
   const ringColor =
     {
@@ -421,10 +429,53 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
         </div>
       </div>
 
-      {/* Stop button */}
+      {/* Room code toggle — shown for all cowork participants */}
+      {coworkRoomCode && (
+        <div className="text-center">
+          {showRoomCode ? (
+            <div className="inline-flex items-center gap-3">
+              <span className="font-mono text-2xl font-bold tracking-widest text-indigo-600">{coworkRoomCode}</span>
+              <button onClick={() => navigator.clipboard.writeText(coworkRoomCode)} className="text-xs text-gray-400 hover:text-indigo-600">Copy</button>
+              <button onClick={() => setShowRoomCode(false)} className="text-xs text-gray-400 hover:text-gray-600">Hide</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowRoomCode(true)} className="text-xs text-gray-400 hover:text-indigo-600 underline">
+              Show room code
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Stop / Leave buttons */}
       <Button onClick={handleStop} variant="secondary" className="w-full">
-        Stop Session
+        {coworkRoomCode ? 'Leave Session' : 'Stop Session'}
       </Button>
+
+      {/* Host-only: end session for everyone */}
+      {isCoworkHost && onHostEndSession && (
+        <>
+          {showEndConfirm ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+              <p className="text-sm text-red-800">This will stop the session for all guests. Are you sure?</p>
+              <div className="flex gap-3">
+                <Button onClick={() => { handleStop(); onHostEndSession(); }} className="flex-1 !bg-red-600 hover:!bg-red-700 text-sm">
+                  End for Everyone
+                </Button>
+                <Button onClick={() => setShowEndConfirm(false)} variant="secondary" className="flex-1 text-sm">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowEndConfirm(true)}
+              className="w-full text-xs text-gray-400 hover:text-red-500 underline text-center"
+            >
+              Leave and end session for all guests
+            </button>
+          )}
+        </>
+      )}
 
       {/* Notification overlay */}
       {showOverlay && currentEvent && (

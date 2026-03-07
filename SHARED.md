@@ -98,14 +98,15 @@ Without code signing, Windows shows a "Windows protected your PC" SmartScreen bl
 
 ### Phase 1: Update web app to match batch file — COMPLETE ✅ (Sessions 1–21)
 
-### Phase 2: Tauri wrapper + blocking popup + cowork — IN PROGRESS (Sessions 9–22)
+### Phase 2: Tauri wrapper + blocking popup + cowork — IN PROGRESS (Sessions 9–26)
 - ✅ Tauri wrapper installed and working
 - ✅ Blocking native popup window (always-on-top)
 - ✅ Window icon set
+- ✅ Firebase backend: cowork room codes, host/guest flows, recurring sessions, host-rooms index
+- ✅ Major app redesign: unified settings model, inline cowork/schedule panels, v3 storage
 - ☐ Settings storage: localStorage → Tauri file system API (AppData) — **NEXT**
-- ☐ Firebase backend: cowork room codes + anonymous UUID install tracking
+- ☐ Full regression test of Session 25–26 redesign (see TODO.md)
 - ☐ Test on Windows. Set up GitHub Actions for Mac builds.
-- **Firebase data model must be designed with future accounts in mind (Phase 3)**
 
 ### Phase 3: Optional accounts (free, only if there's traction)
 - Firebase Auth: optional "Create account" button
@@ -120,6 +121,23 @@ Without code signing, Windows shows a "Windows protected your PC" SmartScreen bl
 - This is the commercial endgame if the app gets real users
 - Not being designed now — but Firebase/Firestore foundation keeps this path open
 
+**Planned tier features (design when pricing model is decided):**
+- Free tier: up to 5 presets, up to 5 hosted rooms, public rooms (code-accessible)
+- Paid tiers: more hosted rooms, more preset slots, private group rooms (invite-only, not just by code)
+- Guest count limits and public vs. private room controls are also tier-differentiators
+
+**Private group rooms (accounts required — Phase 3+):**
+- "Share with specific users" option when creating a room — room only accessible to invited UIDs
+- Guests cannot add new users; host (or co-hosts) control membership
+- Distinct from code-based "anyone with the code" rooms
+- Builds on Phase 3 user accounts
+
+**Stable room codes + multi-host + persistent rooms (Phase 3+):**
+- Option for rooms to stay open after a session ends (like Zoom/Teams recurring meetings)
+- Recurring work sessions with a stable, reusable room code
+- Multiple co-hosts with host-level permissions (like WhatsApp/Telegram group admins or Google Groups owners)
+- Design this alongside Phase 3 accounts — do not block on it
+
 ---
 
 ## Tech Stack
@@ -131,6 +149,8 @@ Without code signing, Windows shows a "Windows protected your PC" SmartScreen bl
 
 ## Architecture
 - Single-page app with 6 screens, navigated via React state (`src/components/App.tsx`)
+- Screens: `main | customize | settings-updated | scheduled-start | timer | session-complete`
+- Settings model: two independent booleans `useTimedWork` + `useMindfulness` (no AppMode)
 - Core timing logic in `src/lib/schedule.ts` — computes a flat event array from settings
 - `public/timer-worker.js` — Web Worker ticks every second, immune to background tab throttling
 - `public/sw.js` — Service worker for offline caching
@@ -146,17 +166,24 @@ src/
     App.tsx                    ← main state machine, screen routing
     NotificationOverlay.tsx    ← in-app popup (to be replaced/supplemented by Tauri window)
     screens/
-      ModeSelect.tsx, DefaultsReview.tsx, Customize.tsx
-      Summary.tsx, Timer.tsx, SessionComplete.tsx
+      Main.tsx                 ← unified main screen: settings summary, presets, hosted rooms,
+                                  inline Host/Schedule/Join cowork panels
+      Customize.tsx            ← settings editor: two collapsible sections (Timed Work, Mindfulness)
+      Summary.tsx              ← settings-updated screen with inline Host/Schedule panels
+      ScheduledStart.tsx       ← countdown-only screen (receives startMs prop)
+      Timer.tsx                ← active session; room code toggle; host end-session option
+      SessionComplete.tsx      ← session stats
     ui/
       Button.tsx, Card.tsx, NumberInput.tsx
       ProgressRing.tsx, StepIndicator.tsx, ToggleSwitch.tsx
   lib/
-    types.ts       ← data types (needs update for mode-specific settings)
-    defaults.ts    ← default values (needs update for defaultsP/M/B)
-    schedule.ts    ← timing event computation
-    storage.ts     ← settings persistence (needs update for mode-prefixed presets)
-    validation.ts  ← input validation (needs M-mode divisibility check)
+    types.ts       ← data types; Settings has useTimedWork/useMindfulness booleans; PresetSlot S1-S5
+    defaults.ts    ← getDefaults() returns unified Settings (no mode arg)
+    schedule.ts    ← timing event computation; branches on useTimedWork boolean
+    storage.ts     ← settings persistence; key mindful-prompter-v3; v2 migration (wipe on detect)
+    cowork.ts      ← Firebase room CRUD, host-rooms index, recurrence, guest/host settings builders
+    firebase.ts    ← Firebase init, anonymous auth
+    validation.ts  ← input validation
     format.ts      ← display formatting
     sound.ts       ← Web Audio API chime
     registerSW.ts  ← PWA service worker registration
@@ -177,7 +204,7 @@ public/
 - **Web apps can't force windows to front:** This is WHY we need Tauri. Do not try to solve this with browser APIs.
 - **Audio autoplay:** AudioContext must be initialized from a user gesture (e.g., "Begin Session" click).
 - **Static export:** `output: 'export'` in next.config.ts — required for Tauri compatibility. No API routes, no server components that fetch data.
-- **localStorage vs AppData:** Use localStorage during web-only dev phase. Switch to Tauri file API in Phase 2. Design storage code to make this swap easy. Current localStorage key: `mindful-prompter-v2`.
+- **localStorage vs AppData:** Use localStorage during web-only dev phase. Switch to Tauri file API in Phase 2. Design storage code to make this swap easy. Current localStorage key: `mindful-prompter-v3` (v2 data is auto-wiped on first load).
 - **CRITICAL — Tauri async commands:** Any command that creates or closes a `WebviewWindow` MUST be `async fn`. Synchronous commands deadlock WebView2 on Windows (wry #583).
 - **CRITICAL — isTauri() guards:** Any `@tauri-apps/api` call in a page that can also load in a browser MUST be guarded with `isTauri()`. WebView2 treats unhandled promise rejections as fatal (unlike Chrome), blanking the page. Use `import { isTauri } from '@/lib/tauri'`.
 
@@ -397,6 +424,33 @@ public/
    - 60s auto-dismiss
 2. Fix any bugs found
 3. When tests pass → Phase 2 (Tauri wrapper)
+
+---
+
+### Session 26 — 2026-03-07 (wmben PC — major redesign implemented)
+
+**What was done:**
+Full implementation of the redesign planned in Session 25:
+- Removed 3-mode system (`AppMode`); replaced with `useTimedWork: boolean` + `useMindfulness: boolean` in Settings
+- Rewrote: `types.ts`, `defaults.ts`, `storage.ts` (key bumped to `mindful-prompter-v3`, v2 auto-wiped), `schedule.ts`, `cowork.ts`, `App.tsx`
+- New `Main.tsx` replaces `DefaultsReview.tsx` — unified main screen with inline expandable panels: Host a Coworking Session, Schedule Start Time (specific or recurring + timezone picker), Join a Coworking Session; hosted rooms list (max 5) with Show Code / Delete
+- Rewrote `Customize.tsx` — two collapsible sections (Timed Work, Mindfulness) with On/Off toggles; guard prevents both being off simultaneously
+- Updated `Summary.tsx` (SettingsUpdated) — inline Host + Schedule panels added
+- Updated `Timer.tsx` — room code toggle (host + guest), host "End for Everyone" confirmation, Stop → "Leave Session" label during cowork
+- Rewrote `ScheduledStart.tsx` — simple countdown-only screen; receives `startMs` prop; no time-picker
+- Deleted: `ModeSelect.tsx`, `CoworkSetup.tsx`, `CoworkJoin.tsx`, `DefaultsReview.tsx`
+- Updated Firebase rules in console: added `host-rooms` path
+- Removed duplicate instructions from `CLAUDE.md` (universal preferences belong in `SHARED.md` only)
+- TypeScript build passes cleanly ✅
+
+**Current state:**
+- All redesign code complete and committed
+- **NEEDS FULL REGRESSION TEST** before Phase 2 work resumes — see TODO.md for checklist
+
+**Next steps for AI (start here next session):**
+1. User will test per the checklist in TODO.md — fix any bugs found
+2. After all tests pass: migrate settings storage localStorage → Tauri AppData (key `mindful-prompter-v3`)
+3. Then: full Tauri end-to-end test
 
 ---
 

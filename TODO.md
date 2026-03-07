@@ -1,13 +1,8 @@
 # MindfulPrompter TODO
 
-## Status: Phase 2 — cowork tested ✅; major app redesign PLANNED, awaiting approval
-
-Items 1–6 coded + tested (Sessions 16–21). Tauri native window verified (Session 22).
-Settings migrated to Tauri AppData (Session 23). Cowork tested ✅ (Session 25).
-**Major redesign planned (Session 25) — plan written, not yet approved or implemented.**
+## Status: Session 27 complete — needs regression testing before Phase 2 resumes
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
-Batch files now kill all previous instances (cmd window + exe + port 3000) before starting fresh.
 
 ---
 
@@ -17,58 +12,138 @@ Batch files now kill all previous instances (cmd window + exe + port 3000) befor
 ### 2. ✅ Tauri layout, images, title, icon verified — DONE (Session 22)
 ### 3. ✅ Settings storage: `localStorage` → Tauri AppData — DONE (Session 23)
 ### 4. ✅ Cowork feature: tested and working (Session 25)
-Firebase security rules confirmed and set. Two-tab sync test passed.
+### 5. ✅ Major redesign: implemented (Session 26) — needs regression testing
+### 6. ✅ Scheduling redesign + cowork toggle: implemented (Session 27) — **needs regression testing**
 
-### 5. ⏳ MAJOR APP REDESIGN — plan written, needs your approval before any code is written
+---
 
-**NEXT SESSION: Read the plan and approve or modify it before proceeding.**
+## Regression test checklist (Sessions 26–27 redesign)
 
-**To pick up where we left off:**
-> "Read the redesign plan at `C:\Users\wmben\.claude\plans\proud-soaring-lantern.md` and show it to me so I can approve or adjust it before we start coding."
+Run `dev-browser.bat` and work through these in order. Fix bugs before moving on.
 
-**What the redesign does (summary):**
-- Eliminates the 3-mode system (Mindfulness / Pomodoro / Combo) → unified settings with two toggles: "Timed Work Sessions" on/off and "Mindfulness Prompts" on/off
-- Mode-select landing screen goes away → app lands directly on main settings page
-- Cowork hosting and joining become inline panels on the main page (no separate screens)
-- Scheduling (date+time, recurring) also moves inline on the main page
-- Hosted rooms listed like presets (max 5, with show-code / delete / settings buttons)
-- Improved timezone picker (UTC offset format, filterable by typing)
-- Refresh persistence for cowork sessions (auto-rejoin on page reload)
-- Show-room-code toggle in the Timer screen
-- Storage format bumped to v3; existing presets wiped (pre-launch, acceptable)
+### A. App startup / main screen
+- [ ] App opens on Main screen with correct layout:
+  - Header / tagline / SettingsDisplay at top
+  - Presets section hidden if none saved; if presets exist, shows collapsed (▶ Saved presets (N))
+  - Coworking rooms section hidden if none; if rooms exist, shows collapsed (▶ Your coworking rooms (N))
+  - Cowork toggle (inline switch) is OFF by default
+  - "When should this session start?" section always visible
+  - "Start session now" radio selected → green "Start Session" button visible
+  - "Change Settings" button at bottom
+  - "Join a Coworking Session ▼" at very bottom
 
-**Full plan file:** `C:\Users\wmben\.claude\plans\proud-soaring-lantern.md`
-**Session notes:** SHARED.md Session 25
+### B. "When should this session start?" section — Start Now
+- [ ] "Start session now" selected → green "Start Session" button visible
+- [ ] Enter key starts session (when focus is not in an input)
+- [ ] Session starts immediately → Timer screen
 
-**First — set Firebase security rules** (5 min, blocks everything else):
-- Firebase Console → Realtime Database → Rules → paste:
-```json
-{
-  "rules": {
-    "rooms": {
-      "$code": {
-        ".read": true,
-        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid)"
-      }
-    }
-  }
-}
-```
+### C. "When should this session start?" section — Specific date & time
+- [ ] Select "Schedule a specific date & time" → date+time inputs expand
+- [ ] Fill in date+time ~1 min from now → "Schedule Session" button appears
+- [ ] Click "Schedule Session" → ScheduledStart countdown screen
+- [ ] ScheduledStart auto-starts when countdown hits 0 → Timer starts
+- [ ] "Start Now" on ScheduledStart screen starts timer immediately
 
-**Then test** (see SHARED.md Session 24 for full checklist):
-- Host creates room → gets code → joins as host → timer starts
-- Guest enters code → sees room status → chooses content mode → joins in sync
-- Late join: guest joins mid-session → jumps to correct position (no popup flood)
-- Recurring session: set future time → both clients count down → start together
+### D. "When should this session start?" section — Recurring schedule
+- [ ] Select "Repeat on a weekly schedule" → day-picker + time + timezone expand
+- [ ] Select day(s), set time, filter timezone by typing → no crash, correct filtering
+- [ ] "Save Schedule" button saves to storage (confirmation message appears)
+- [ ] Navigate away and come back → schedule is still saved (persists across page loads)
+- [ ] Session-start notice banner: set a recurring schedule for "now" (or a time just passed) → banner shows "▶ Your scheduled session started X minutes ago" + "Skip this session" + "→ Join now"
+- [ ] Set a time ≤5 min in the future → banner shows "⏰ Your scheduled session starts in X minutes" + "Cancel session" + "→ Go to session"
+- [ ] "→ Go to session" → ScheduledStart countdown
+- [ ] "→ Join now" → Timer starts immediately
+- [ ] "Cancel session" → "Are you sure?" confirm → clears schedule, banner disappears
 
-**Deferred cowork features** (add in a follow-up session after core is tested):
-- Public rooms (discoverable browse list)
-- Host "delete room" UI
-- Room auto-expiry mechanism
-- Vercel deployment (web companion for guests)
-- Anonymous UUID analytics (install count / usage tracking)
+### E. Customize screen
+- [ ] "Timed Work" section has an On/Off toggle
+- [ ] "Mindfulness Prompts" section has an On/Off toggle
+- [ ] Guard: trying to turn both off simultaneously is blocked (one stays on)
+- [ ] Timed Work fields only visible when Timed Work is on
+- [ ] Mindfulness fields only visible when Mindfulness is on
+- [ ] Combined mode: prompt interval validates it divides evenly into work period length
+- [ ] Mindfulness-only mode: prompt interval validates it divides evenly into 60
+- [ ] No changes → "Start Session" skips Settings Updated screen
+- [ ] With changes → goes to Settings Updated screen
+- [ ] "Reset to original defaults" → confirmation → resets correctly
+- [ ] "← Back" returns to main screen without saving
 
-### 5. Distribution prep (before public launch)
+### F. Settings Updated screen (Summary.tsx)
+- [ ] Shows updated settings correctly
+- [ ] Save options: "Save Changes to Preset: [name]" (if preset context), "Save as a Preset", "Save as Default"
+- [ ] Cowork toggle and "When should this session start?" section present (same as Main)
+- [ ] "Start session now" → "Start Session" button → session starts
+- [ ] Specific date → "Schedule Session" → ScheduledStart
+- [ ] Recurring → "Save Schedule" → schedule saved
+- [ ] Post-save view (after saving preset): preset list collapsed by default (▶ Saved presets (N))
+- [ ] "Change Settings" button at bottom
+
+### G. Presets (unified S1–S5 namespace, v3 storage)
+- [ ] Save as Preset → appears on Main screen collapsed under "▶ Saved presets (N)"
+- [ ] Click header to expand → preset list visible
+- [ ] Load preset → settings summary updates, "Preset selected: SX — Name" shows
+- [ ] Rename preset → name updates inline
+- [ ] Delete preset → confirm button → removed from list
+- [ ] Up to 5 presets (S1–S5)
+
+### H. Cowork toggle + room creation
+- [ ] Toggle OFF → only "Start Session" button visible in "start now" option
+- [ ] Toggle ON → cowork creation form appears below "When?" section
+- [ ] Cowork ON + "Start session now" → no "Start Session" button in WhenSection; form handles launch
+- [ ] Room name field pre-filled with "Room N"
+- [ ] "Share prompts" checkbox visible only when Mindfulness is on
+- [ ] "Generate Room Code" → room created, 6-char code shown; timing set from current startType:
+  - startType 'now' → room starts immediately
+  - startType 'specific' → room has future startTime
+  - startType 'recurring' → room has recurrenceRule
+- [ ] "Copy" button copies code to clipboard
+- [ ] "Join as Host & Start Session" → timer starts (or ScheduledStart if future)
+- [ ] After generating: room appears in "▶ Your coworking rooms" list on next load
+- [ ] "Make this a NEW Hosted Coworking Session" label when a room is already loaded
+
+### I. Coworking rooms list
+- [ ] Collapsed by default (▶ Your coworking rooms (N))
+- [ ] Click header → expands list
+- [ ] Load room settings → "Room loaded: [name]" indicator updates
+- [ ] "Join as host" → timer starts
+- [ ] "Show code" / "Hide code" toggle
+- [ ] Delete room → "Confirm delete?" → deleted from Firebase
+
+### J. Join a Coworking Session (panel at bottom)
+- [ ] "Join a Coworking Session ▼" expands at bottom of page
+- [ ] Invalid code → "Room not found" error
+- [ ] Valid code → room summary shown; content mode options
+- [ ] "Join Session" → timer starts synced to host's start time
+
+### K. Timer screen (cowork features)
+- [ ] During a hosted session: room code toggle visible → shows/hides code
+- [ ] During a guest session: room code toggle visible
+- [ ] Host sees "End Session for Everyone" with confirmation dialog
+- [ ] Stop button label is "Leave Session" during cowork session
+- [ ] Two-tab sync test: host starts → guest joins → both timers fire at same time
+
+### L. ScheduledStart screen
+- [ ] Shows countdown to the scheduled time
+- [ ] "Start Now" starts immediately
+- [ ] Auto-starts when countdown reaches zero
+- [ ] Cowork: if arriving here via cowork host start, timer preserves cowork context (room code, host flag)
+- [ ] Page refresh while on ScheduledStart for a future cowork room → auto-rejoin restores ScheduledStart
+
+### M. Session complete
+- [ ] Stats displayed correctly after a short test session
+- [ ] "Start another session" returns to main screen
+
+---
+
+## 7. ⏳ Settings storage: `localStorage` → Tauri AppData — NEXT after tests pass
+
+Once regression tests pass:
+- Migrate `mindful-prompter-v3` key from localStorage to Tauri file system API
+- Then run full Tauri end-to-end test (`dev-tauri.bat`)
+
+---
+
+## 7. Distribution prep (before public launch)
 - Build unsigned installer — share with tech-adjacent testers
 - Decide: Microsoft Store submission (free signing) vs. paid OV certificate (~$300–500/yr)
 - Set up GitHub Actions for Mac builds (required — cannot build Mac on Windows)
@@ -89,68 +164,3 @@ Firebase security rules confirmed and set. Two-tab sync test passed.
 - Access tiers (e.g., team cowork, advanced features)
 - This is the commercial endgame
 - **Not being designed now** — but Firebase foundation keeps this path open
-
----
-
-## Session 15 features — status (all done ✅)
-
-### Item 1 — Helper text standardization ✅ DONE
-### Item 2 — Preset name pre-filled ✅ DONE
-### Item 3 — True popup blocking ✅ DONE
-### Item 3b — Hard break option ✅ DONE
-
-### Item 4 — Mindfulness scope for Both mode ✅ DONE (Session 19 + 20 bugfixes)
-- `MindfulnessScope`: `'work-only' | 'breaks' | 'work-starts' | 'all'` (default `'work-only'`)
-- 4-option selector in Customize (Both mode); shown in DefaultsReview + Summary
-- `showPromptOn` object in schedule.ts gates promptText/dismissSeconds per event type
-- dismissSeconds=0 on events without prompt (so no forced delay on non-mindfulness popups)
-
-### Item 5 — Popup redesign ✅ DONE (Session 19 + 20 bugfixes)
-- All popupLabel fields removed; title strings updated; work_start body fixed
-- M-mode session_complete: IS the Nth prompt (not a separate extra popup)
-- Session-complete body simplified to `"Total session time: X"` (no misleading formula)
-
-### Item 6 — Prompt counter in M-mode ✅ DONE (Session 19 + 20 bugfixes)
-- `promptCountTotal` on TimerEvent; 0 = indefinite sentinel; undefined = non-M-mode
-- Counter shown in NotificationOverlay (browser) and popup/page.tsx (Tauri)
-- Final popup shows "Prompt N of N" correctly
-
----
-
-## After Items 1–6 → remaining Phase 2 work
-- Settings storage: switch from localStorage → Tauri file system API (AppData)
-- Cowork feature: Firebase Realtime Database for shared session codes
-
----
-
-## Completed work (all committed)
-
-### Sessions 1–9 (see SHARED.md for full history)
-- [x] All Phase 1 features (mode-specific defaults, presets, session stats, UX flow)
-- [x] Tauri wrapper scaffold + native popup window (Sessions 9–11)
-- [x] Popup blank-white bug fixed (Session 10)
-- [x] Blocking popup + popup replacement (Session 11)
-- [x] Popup labels customizable per event type (Session 12)
-- [x] ∞ display for unlimited periods/sets (Sessions 12–13)
-- [x] Two-step preset save (Session 12)
-- [x] Overlay redesign (Session 12)
-
-### Session 14 (2026-03-03, new PC)
-- [x] Batch files fixed: %USERPROFILE% replaces hardcoded username; port 3000 cleanup added
-- [x] Default sets = 3 when "multiple sets" toggled on
-- [x] Terminology: "session" (25-min unit) → "period" throughout all user-facing text
-- [x] Period numbering: now shows period-within-set (not global count)
-- [x] Timer screen detail line: "out of 4 *5-period* sets" with italics
-- [x] Popup text rewrite: Break!/Break over! titles + position-aware body text
-- [x] TimerEvent gains totalSets and periodsPerSet fields
-
----
-
-## Important gotchas
-
-- **Service worker cache**: Handled automatically — batch files kill old server before starting fresh.
-- **React strict mode**: Double-mounts in dev. Timer uses `startTimeRef` to preserve start time.
-- **JavaScript falsy 0**: Don't use `||` with numeric settings (0 is a valid value).
-- **Static export**: `output: 'export'` in next.config.ts — required for Tauri compatibility.
-- **Cargo PATH**: `dev-tauri.bat` uses `%USERPROFILE%\.cargo\bin` — works on any Windows username.
-- **Terminology**: work period → set → session. "Session" only means the whole thing start to finish.

@@ -257,13 +257,6 @@ export default function Customize({
         )}
       </CollapsibleSection>
 
-      {/* ── Sound ── */}
-      <Section title="Sound">
-        <SettingField label="Play a sound when prompts and alerts appear?">
-          <YesNoToggle value={s.playSound} onChange={(v) => update({ playSound: v })} />
-        </SettingField>
-      </Section>
-
       <div className="flex flex-col gap-3">
         <Button onClick={handleAction} className="w-full text-lg">
           {hasChanges ? 'Review Changes' : 'No changes made — Start Session'}
@@ -317,14 +310,6 @@ function CollapsibleSection({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 px-1">{title}</p>
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">{children}</div>
-    </div>
-  );
-}
 
 function SettingField({ label, helper, children }: { label: string; helper?: string; children: React.ReactNode }) {
   return (

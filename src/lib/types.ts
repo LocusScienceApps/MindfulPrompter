@@ -133,6 +133,11 @@ export interface CoworkRoom {
 /** Preset slot key — S1–S5 (unified, no mode prefix) */
 export type PresetSlot = 'S1' | 'S2' | 'S3' | 'S4' | 'S5';
 
+/** What the user was editing when they clicked "Change Settings" */
+export type EditContext =
+  | { type: 'preset'; slot: PresetSlot; name: string }
+  | { type: 'cowork-room'; code: string; name: string };
+
 /** A saved preset */
 export interface Preset {
   name: string;
@@ -143,6 +148,16 @@ export interface Preset {
 export interface SettingsFile {
   defaults?: Partial<Settings>;
   presets: Partial<Record<PresetSlot, Preset>>;
+  soloSchedule?: {
+    type: 'specific';
+    date: string;   // "YYYY-MM-DD"
+    time: string;   // "HH:MM"
+  } | {
+    type: 'recurring';
+    days: CoworkDay[];
+    time: string;   // "HH:MM"
+    timezone: string;
+  };
 }
 
 /** Stats accumulated during a timer session */

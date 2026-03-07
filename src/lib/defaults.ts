@@ -4,7 +4,7 @@ import { formatNum } from './format';
 /** Factory default settings — unified, no separate modes */
 export function getDefaults(): Settings {
   return {
-    useTimedWork: true,
+    useTimedWork: false,
     useMindfulness: true,
     // Pomodoro defaults
     workMinutes: 25,
@@ -16,7 +16,7 @@ export function getDefaults(): Settings {
     hardBreak: false,
     // Mindfulness defaults
     promptText: 'Are you doing what you should be doing?',
-    promptIntervalMinutes: 12.5,
+    promptIntervalMinutes: 15,
     dismissSeconds: 15,
     promptCount: 0, // 0 = run indefinitely (mindfulness-only mode only)
     bothMindfulnessScope: 'work-only',

@@ -26,7 +26,8 @@ self.onmessage = function (e) {
     }
     schedule = msg.schedule || [];
     startTime = msg.startTime;
-    firedSet = new Set();
+    // Pre-populate firedSet so late-joining cowork sessions don't replay past events
+    firedSet = new Set(msg.initialFiredIndices || []);
 
     // Tick every second
     intervalId = setInterval(function () {

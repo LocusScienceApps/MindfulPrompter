@@ -145,15 +145,8 @@ function getCurrentPhase(
   return { phase, phaseLabel, phaseProgress, timeLeft, contextLines, detailLine };
 }
 
-/** Request notification permission */
-function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}
-
-/** Send a browser notification */
-function sendBrowserNotification(event: TimerEvent) {
+/** Send a browser OS notification (used when the tab is hidden) */
+function sendBrowserNotification(event: TimerEvent, playSound: boolean) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
   const body = event.promptText
@@ -164,6 +157,8 @@ function sendBrowserNotification(event: TimerEvent) {
     body: body.replace(/\n/g, ' '),
     tag: 'mindful-prompter',
     icon: '/icon-192x192.png',
+    requireInteraction: true, // stays visible until the user clicks it
+    silent: !playSound,       // suppress OS notification sound when app sound is off
   });
 }
 
@@ -174,8 +169,11 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
   const [showOverlay, setShowOverlay] = useState(false);
   const [showRoomCode, setShowRoomCode] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [localPlaySound, setLocalPlaySound] = useState(settings.playSound);
+  const localPlaySoundRef = useRef(settings.playSound);
+  useEffect(() => { localPlaySoundRef.current = localPlaySound; }, [localPlaySound]);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const scheduleRef = useRef<TimerEvent[]>([]);
   const startTimeRef = useRef<number>(coworkStartTime ?? Date.now()); // Stable start time across re-mounts
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -199,10 +197,9 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
     };
   }, []);
 
-  // Initialize audio and request notification permission once
+  // Initialize audio once
   useEffect(() => {
     initAudio();
-    requestNotificationPermission();
   }, []);
 
   // In Tauri: listen for the native popup being dismissed
@@ -219,108 +216,123 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
     return () => { unlisten?.(); };
   }, [onSessionComplete, buildStats]);
 
-  // Start the interval timer — re-creates on strict mode remount but uses stable start time
+  // Start the Web Worker timer — runs off the main thread so it isn't throttled
+  // when the tab is hidden. Uses a stable start time across strict-mode remounts.
   useEffect(() => {
     const schedule = computeSchedule(settings);
     scheduleRef.current = schedule;
 
-    // Pre-populate firedSet for late-joining cowork sessions — skip past events silently
+    // Pre-populate skip list for late-joining cowork sessions
     const initialElapsed = (Date.now() - startTimeRef.current) / 1000;
-    const firedSet = new Set<number>();
+    const initialFiredIndices: number[] = [];
     if (initialElapsed > 2) {
       for (let i = 0; i < schedule.length; i++) {
         if (schedule[i].offsetSeconds <= initialElapsed) {
-          firedSet.add(i);
+          initialFiredIndices.push(i);
         }
       }
     }
 
-    const tick = () => {
-      const now = Date.now();
-      const elapsed = (now - startTimeRef.current) / 1000;
+    const worker = new Worker('/timer-worker.js');
+    workerRef.current = worker;
 
-      setElapsed(elapsed);
-      elapsedRef.current = elapsed;
+    worker.onmessage = (e) => {
+      const msg = e.data;
 
-      // Check for events that should fire
-      for (let i = 0; i < scheduleRef.current.length; i++) {
-        if (firedSet.has(i)) continue;
-        if (elapsed >= scheduleRef.current[i].offsetSeconds) {
-          firedSet.add(i);
-          const event = scheduleRef.current[i];
+      if (msg.type === 'tick') {
+        setElapsed(msg.elapsed);
+        elapsedRef.current = msg.elapsed;
+        return;
+      }
 
-          // Skip silent events (e.g., initial session start)
-          if (event.silent) continue;
+      if (msg.type === 'event') {
+        const event = msg.event as TimerEvent;
 
-          // Accumulate stats
-          if (event.type === 'mindfulness') {
+        // Skip silent events (e.g., initial session start marker)
+        if (event.silent) return;
+
+        // Accumulate stats
+        if (event.type === 'mindfulness') {
+          statsRef.current.prompts++;
+        } else if (event.type === 'short_break') {
+          statsRef.current.sessions++;
+        } else if (event.type === 'long_break') {
+          statsRef.current.sessions++;
+          statsRef.current.sets++;
+        } else if (event.type === 'session_complete') {
+          statsRef.current.sessions++;
+          statsRef.current.sets++;
+          // M-mode: session_complete IS the final mindfulness prompt — count it
+          if (event.promptCountTotal !== undefined) {
             statsRef.current.prompts++;
-          } else if (event.type === 'short_break') {
-            statsRef.current.sessions++;
-          } else if (event.type === 'long_break') {
-            statsRef.current.sessions++;
-            statsRef.current.sets++;
-          } else if (event.type === 'session_complete') {
-            statsRef.current.sessions++;
-            statsRef.current.sets++;
-            // M-mode: session_complete IS the final mindfulness prompt — count it
-            if (event.promptCountTotal !== undefined) {
-              statsRef.current.prompts++;
-            }
-            // Record canonical end time = when the session_complete event fires.
-            // We do NOT add the dismiss delay: the summary screen total should match
-            // the popup body "Total session time: X", not include forced-open delay.
-            canonicalEndSecondsRef.current = event.offsetSeconds;
           }
+          // Record canonical end time = when the session_complete event fires.
+          canonicalEndSecondsRef.current = event.offsetSeconds;
+        }
 
-          setCurrentEvent(event);
+        setCurrentEvent(event);
 
-          if (isTauri()) {
-            showNotificationWindow(
-              event.type,
-              event.title,
-              event.body,
-              event.promptText,
-              event.dismissSeconds ?? settingsRef.current.dismissSeconds,
-              event.autoClose,
-              event.sessionNumber,
-              event.promptCountTotal,
-            ).catch(console.error);
-          } else {
+        if (isTauri()) {
+          showNotificationWindow(
+            event.type,
+            event.title,
+            event.body,
+            event.promptText,
+            event.dismissSeconds ?? settingsRef.current.dismissSeconds,
+            event.autoClose,
+            event.sessionNumber,
+            event.promptCountTotal,
+          ).catch(console.error);
+        } else {
+          // "User can see this tab" = tab is active AND the browser window has OS focus.
+          // document.hidden only catches tab-switching within Chrome; document.hasFocus()
+          // catches Chrome being behind VS Code, Word, or any other app.
+          const userCanSeeTab = !document.hidden && document.hasFocus();
+
+          // session_complete always shows the in-app overlay — the user must dismiss it
+          // to end the session. For other events, only show overlay when it's actually visible.
+          if (event.type === 'session_complete' || userCanSeeTab) {
             setShowOverlay(true);
           }
 
-          // Play sound
-          if (settingsRef.current.playSound) {
-            playChime();
+          // Send an OS notification whenever the user can't see the tab — persists until
+          // clicked (requireInteraction). Clicking it focuses Chrome and the overlay waits.
+          if (!userCanSeeTab) {
+            sendBrowserNotification(event, localPlaySoundRef.current);
           }
-
-          // Browser notification
-          sendBrowserNotification(event);
-
-          // Event log
-          const logMsg =
-            event.type === 'mindfulness'
-              ? 'Mindfulness prompt'
-              : event.type === 'short_break'
-                ? 'Break started'
-                : event.type === 'long_break'
-                  ? 'Long break started'
-                  : event.type === 'session_complete'
-                    ? 'Session complete!'
-                    : event.title || 'Work period started';
-          setLog((prev) => [...prev, { time: formatTime(), message: logMsg }]);
         }
+
+        // Play sound
+        if (localPlaySoundRef.current) {
+          playChime();
+        }
+
+        // Event log
+        const logMsg =
+          event.type === 'mindfulness'
+            ? 'Mindfulness prompt'
+            : event.type === 'short_break'
+              ? 'Break started'
+              : event.type === 'long_break'
+                ? 'Long break started'
+                : event.type === 'session_complete'
+                  ? 'Session complete!'
+                  : event.title || 'Work period started';
+        setLog((prev) => [...prev, { time: formatTime(), message: logMsg }]);
       }
     };
 
-    intervalRef.current = setInterval(tick, 1000);
+    worker.postMessage({
+      type: 'start',
+      schedule,
+      startTime: startTimeRef.current,
+      initialFiredIndices,
+    });
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      worker.postMessage({ type: 'stop' });
+      worker.terminate();
+      workerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps — runs once, uses refs for everything
@@ -338,9 +350,10 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
   }, [currentEvent, onSessionComplete, buildStats]);
 
   const handleStop = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    if (workerRef.current) {
+      workerRef.current.postMessage({ type: 'stop' });
+      workerRef.current.terminate();
+      workerRef.current = null;
     }
     // Close the native popup window if one is open
     if (isTauri()) {
@@ -445,6 +458,17 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
           )}
         </div>
       )}
+
+      {/* Sound toggle */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => setLocalPlaySound((v) => !v)}
+          className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-700 transition-colors"
+        >
+          <span>{localPlaySound ? '🔊' : '🔇'}</span>
+          <span>{localPlaySound ? 'Sound on' : 'Sound off'}</span>
+        </button>
+      </div>
 
       {/* Stop / Leave buttons */}
       <Button onClick={handleStop} variant="secondary" className="w-full">

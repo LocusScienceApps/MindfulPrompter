@@ -74,6 +74,30 @@ export function subscribeToRoom(
   return unsubscribe;
 }
 
+/** Update a room's settings. Only the host can update their own room. */
+export async function updateRoom(
+  code: string,
+  updates: {
+    mindfulnessOnly?: boolean;
+    timingSettings?: CoworkTimingSettings;
+    sharePrompts?: boolean;
+    promptSettings?: CoworkRoom['promptSettings'];
+    name?: string;
+  },
+): Promise<void> {
+  const uid = await ensureAuth();
+  const room = await getRoom(code);
+  if (!room) throw new Error('Room not found.');
+  if (room.hostUid !== uid) throw new Error('Only the host can update this room.');
+  const updated: CoworkRoom = { ...room, ...updates };
+  await set(ref(db, `rooms/${code}`), updated);
+  await set(ref(db, `host-rooms/${uid}/${code}`), {
+    createdAt: updated.createdAt,
+    name: updated.name ?? null,
+    timingSettings: updated.timingSettings,
+  });
+}
+
 /** Delete a room. Only the host (matching UID) can delete. */
 export async function deleteRoom(code: string): Promise<void> {
   const uid = await ensureAuth();

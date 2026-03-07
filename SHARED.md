@@ -98,14 +98,16 @@ Without code signing, Windows shows a "Windows protected your PC" SmartScreen bl
 
 ### Phase 1: Update web app to match batch file — COMPLETE ✅ (Sessions 1–21)
 
-### Phase 2: Tauri wrapper + blocking popup + cowork — IN PROGRESS (Sessions 9–26)
+### Phase 2: Tauri wrapper + blocking popup + cowork — IN PROGRESS (Sessions 9–27)
 - ✅ Tauri wrapper installed and working
 - ✅ Blocking native popup window (always-on-top)
 - ✅ Window icon set
 - ✅ Firebase backend: cowork room codes, host/guest flows, recurring sessions, host-rooms index
 - ✅ Major app redesign: unified settings model, inline cowork/schedule panels, v3 storage
-- ☐ Settings storage: localStorage → Tauri file system API (AppData) — **NEXT**
-- ☐ Full regression test of Session 25–26 redesign (see TODO.md)
+- ✅ Home page redesign: hero header, section cards with inline toggles, SettingsDisplay component
+- ✅ Session 27 UX redesign: scheduling as central flow, cowork toggle, collapsible presets/rooms, solo recurring schedule, 5-min session notice
+- ☐ **Full regression test** of Sessions 26–27 redesign (see TODO.md) — **DO THIS FIRST**
+- ☐ Settings storage: localStorage → Tauri file system API (AppData) — after tests pass
 - ☐ Test on Windows. Set up GitHub Actions for Mac builds.
 
 ### Phase 3: Optional accounts (free, only if there's traction)
@@ -427,6 +429,49 @@ public/
 
 ---
 
+### Session 27 — 2026-03-07 (wmben PC — home page redesign + inline toggles)
+
+**What was done:**
+- Fixed stale TODO.md — replaced "redesign planned, awaiting approval" with full regression test checklist (sections A–I)
+- Fixed nested `<button>` HTML error in Main.tsx: Tooltip inner element changed from `<button>` to `<span role="button">` (two console errors resolved)
+- Changed factory defaults: `useTimedWork: false` (mindfulness-only by default), `promptIntervalMinutes: 15`
+- Created `src/components/ui/SettingsDisplay.tsx` — new shared component used by both Main.tsx and Summary.tsx:
+  - Sound toggle (🔊/🔇) top-right, small icon style
+  - Timed Work section card: inline toggle (left) + tomato.png 32px + collapsible body + inline "Multiple sets" toggle
+  - Mindfulness section card: inline toggle (left) + bowl.png 32px + collapsible body
+  - Toggle guards: cannot turn last active section off; disabled with tooltip
+  - When toggling Timed Work OFF: restore saved defaults interval if it divides evenly into 60, else 15; reset promptCount to 0
+  - When toggling Timed Work ON: set interval to workMinutes/2
+- Updated `Main.tsx`:
+  - Hero header: logo.png 64px + "MindfulPrompter" h1 + tagline + "Pomodoro-style sessions" / "behavioral nudges" with Wikipedia tooltip links
+  - SettingsDisplay replaces old flat settings summary
+  - "Reset to my saved defaults" button below presets (hidden when already at defaults)
+  - Added `isAtDefaults` and `onLoadDefaults` props
+- Updated `App.tsx`:
+  - Logo image replaces SVG home icon in the back-link (non-main screens)
+  - `handleLoadDefaults` and `isAtDefaults` computed value wired to Main
+  - `onSettingsChange={setSettings}` wired to Summary
+- Rewrote `Summary.tsx`:
+  - Local settings state (`localS`) so toggles on this screen affect what gets saved/started
+  - SettingsDisplay replaces old flat summary in both main view and post-save view
+  - Simplified headings: "Settings Updated" and "Current Settings"
+  - `onSettingsChange` prop keeps App.tsx in sync
+- TypeScript passes clean ✅
+
+**On the cowork + "outside local IP" question:**
+The cowork feature already works across the internet — it uses Firebase Realtime Database, which is a cloud service. Any two users on different networks can cowork using room codes. There is no "local IP" limitation for the app's features. The next distribution step is building the Tauri installer (`.exe` for Windows, `.dmg` for Mac) so that other people can install the app.
+
+**Current state:**
+- All redesign code complete and committed (Sessions 26–27)
+- **NEEDS FULL REGRESSION TEST** before Phase 2 (Tauri AppData storage) resumes — see TODO.md
+
+**Next steps for AI (start here next session):**
+1. User will test per the checklist in TODO.md — fix any bugs found
+2. After all tests pass: migrate settings storage from localStorage to Tauri AppData file system
+3. Then: full Tauri end-to-end test (`dev-tauri.bat`)
+
+---
+
 ### Session 26 — 2026-03-07 (wmben PC — major redesign implemented)
 
 **What was done:**
@@ -450,6 +495,42 @@ Full implementation of the redesign planned in Session 25:
 **Next steps for AI (start here next session):**
 1. User will test per the checklist in TODO.md — fix any bugs found
 2. After all tests pass: migrate settings storage localStorage → Tauri AppData (key `mindful-prompter-v3`)
+3. Then: full Tauri end-to-end test
+
+---
+
+### Session 27 — 2026-03-07 (wmben PC — scheduling redesign + cowork toggle)
+
+**What was done:**
+Two minor fixes from Session 26:
+- `Summary.tsx`: preset save button now reads "Save Changes to Preset: [name]" (not slot number)
+- `Main.tsx`: cowork button label says "Make this a NEW Hosted Coworking Session" when a room is already loaded
+
+Major UX redesign (planned + implemented this session):
+- `src/lib/types.ts`: added `soloSchedule?` union type to `SettingsFile` (specific date/time OR recurring weekly)
+- `src/lib/storage.ts`: added `getSoloSchedule`, `saveSoloSchedule`, `clearSoloSchedule`
+- `src/components/ui/WhenSection.tsx` **(new file)**: shared "When should this session start?" component — 3 radios (now / specific / recurring), timezone picker, day picker — used by both Main and Summary
+- `src/components/screens/Main.tsx`: complete layout restructure
+  - Presets collapsed by default (▶ Saved presets (N)); rooms collapsed by default
+  - Replaced "Start Session" standalone button + collapsible panels with a cowork inline toggle + always-visible WhenSection
+  - "Start Session" button only appears inside WhenSection when startType === 'now' AND cowork toggle is OFF
+  - Cowork creation form (room name, prompt sharing, Generate Room Code) appears below WhenSection when toggle ON
+  - `handleGenerateRoom` now respects `startType` to set `startTime` (specific) or `recurrenceRule` (recurring)
+  - Enter key only triggers start when `startType === 'now'` and cowork toggle is OFF
+  - "Save Schedule" saves recurring solo schedule to storage
+- `src/components/screens/Summary.tsx`: same redesign applied — replaced `InlinePanels` component with `CoworkAndWhen` using cowork toggle + WhenSection; post-save preset list now collapsible
+- `src/components/App.tsx`:
+  - Session-start polling every 30s: shows notice banner when solo schedule is ≤5 min away or already active; "Go to session" / "Join now" / "Cancel" with confirmation
+  - `handleCoworkHostStart` checks `timing.isFuture` → routes to `scheduled-start` instead of `timer`
+  - `ScheduledStart.onStart` preserves cowork state when `coworkRoomCode` is set (no longer calls `handleBeginSession` which would wipe it)
+  - Auto-rejoin on refresh: added `else if (timing?.isFuture)` branch → restores cowork state to `scheduled-start` screen
+
+**Current state:**
+- All code complete and committed — **NEEDS REGRESSION TESTING** (see TODO.md)
+
+**Next steps for AI (start here next session):**
+1. User will test per checklist in TODO.md — fix any bugs found
+2. After all tests pass: migrate settings storage localStorage → Tauri AppData
 3. Then: full Tauri end-to-end test
 
 ---

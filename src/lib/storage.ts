@@ -200,3 +200,31 @@ export function deletePreset(slot: PresetSlot): void {
   delete file.presets[slot];
   saveFile(file);
 }
+
+// ── Solo Schedule ───────────────────────────────────────────────────────────
+
+/**
+ * Load the saved solo session schedule.
+ * Returns undefined if no schedule has been saved.
+ */
+export function getSoloSchedule(): SettingsFile['soloSchedule'] {
+  return loadFile().soloSchedule;
+}
+
+/**
+ * Save a solo session schedule (specific date/time or recurring weekly).
+ */
+export function saveSoloSchedule(schedule: NonNullable<SettingsFile['soloSchedule']>): void {
+  const file = loadFile();
+  file.soloSchedule = schedule;
+  saveFile(file);
+}
+
+/**
+ * Clear the saved solo session schedule.
+ */
+export function clearSoloSchedule(): void {
+  const file = loadFile();
+  delete file.soloSchedule;
+  saveFile(file);
+}

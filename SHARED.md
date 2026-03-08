@@ -106,7 +106,8 @@ Without code signing, Windows shows a "Windows protected your PC" SmartScreen bl
 - ✅ Major app redesign: unified settings model, inline cowork/schedule panels, v3 storage
 - ✅ Home page redesign: hero header, section cards with inline toggles, SettingsDisplay component
 - ✅ Session 27 UX redesign: scheduling as central flow, cowork toggle, collapsible presets/rooms, solo recurring schedule, 5-min session notice
-- ☐ **Full regression test** of Sessions 26–27 redesign (see TODO.md) — **DO THIS FIRST**
+- ✅ Session 29 row redesign: `···` dropdowns, state badges, room rename, sort, smart join button, Summary.tsx overhaul (preset/room lists everywhere, section reorder, cowork-first)
+- ☐ **Full regression test** of Sessions 26–29 redesign (see TODO.md sections A–V) — **DO THIS FIRST**
 - ☐ Settings storage: localStorage → Tauri file system API (AppData) — after tests pass
 - ☐ Test on Windows. Set up GitHub Actions for Mac builds.
 
@@ -426,6 +427,30 @@ public/
    - 60s auto-dismiss
 2. Fix any bugs found
 3. When tests pass → Phase 2 (Tauri wrapper)
+
+---
+
+### Session 29 — 2026-03-08 (wmben PC — row redesign + Summary.tsx overhaul)
+
+**What was done:**
+
+- **`···` dropdown menus** on every preset row and room row (Main.tsx + Summary.tsx), replacing individual inline buttons
+- **`▶ Start` button** on preset rows (loads preset + starts session immediately)
+- **`▶ Join Room` button** on room rows — only shown for "In progress" rooms
+- **State badges** on room rows: "In progress" (emerald), "Starts today at HH:mm" / "Starts MMM D at HH:mm" (indigo), "Ended today at HH:mm" / "Ended MMM D at HH:mm" (gray). Time always shown.
+- **`↻` recurring icon** on rooms with `recurrenceRule` — tooltip "Recurring session"
+- **Room sorting**: In Progress → Upcoming (soonest first) → Ended (most recent first)
+- **Room rename** (new capability): `updateRoom(code, { name })` via Firebase
+- **"Change Settings" shortcut** in `···` menu: loads item context + navigates directly to Customize
+- **Expand/collapse icons** changed from `▶`/`▼` to `+`/`−` everywhere (avoids confusion with `▶ Start` / `▶ Join Room`)
+- **Smart post-room-generation join button**: if room starts within 5 min → green `▶ Join Room Now`; otherwise → secondary button + "Room saved."
+- **Preset list added to Summary.tsx main view** (was missing — only existed in post-save view)
+- **Rooms list added to Summary.tsx** (was entirely missing; now in both main view and post-save view)
+- **Summary.tsx section reorder**: cowork toggle moved first (before save options), save options hidden when cowork ON, WhenSection always visible, cowork form last
+- **Cowork toggle defaults ON** on Summary.tsx when `editContext.type === 'cowork-room'`
+- **App.tsx**: added `onLoadRoom={handleLoadRoom}` prop to `<SettingsUpdated>`
+
+**Files changed:** `src/components/screens/Main.tsx`, `src/components/screens/Summary.tsx`, `src/components/App.tsx`
 
 ---
 

@@ -1,6 +1,6 @@
 # MindfulPrompter TODO
 
-## Status: Session 28 complete — needs regression testing before Phase 2 resumes
+## Status: Session 29 complete — row redesign implemented, needs regression testing
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -14,6 +14,7 @@
 ### 4. ✅ Cowork feature: tested and working (Session 25)
 ### 5. ✅ Major redesign: implemented (Session 26) — needs regression testing
 ### 6. ✅ Scheduling redesign + cowork toggle: implemented (Session 27) — **needs regression testing**
+### 7. ✅ Row redesign + room badges + Summary.tsx overhaul: implemented (Session 29) — **needs regression testing**
 
 ---
 
@@ -135,7 +136,79 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 
 ---
 
-## 7. ⏳ Settings storage: `localStorage` → Tauri AppData — NEXT after tests pass
+---
+
+## Regression test checklist (Session 29: row redesign)
+
+Run `dev-browser.bat`. Work through these in order. Fix bugs before moving on.
+
+### N. Expand/collapse icons (all locations)
+- [ ] Presets section header on Main shows `+` when collapsed, `−` when expanded (NOT `▶`/`▼`)
+- [ ] Rooms section header on Main shows `+` / `−`
+- [ ] Presets section header on Summary.tsx (Settings Updated page) shows `+` / `−`
+- [ ] Rooms section header on Summary.tsx shows `+` / `−`
+
+### O. Preset rows — Main screen
+- [ ] Expand "Saved presets" — each row shows: `[S1 — Name]  [▶ Start]  [···]`
+- [ ] `▶ Start` button: loads preset settings AND immediately starts a session (skips Settings Updated screen)
+- [ ] `···` opens dropdown with: "Change Settings", "Rename", "Delete"
+- [ ] "Change Settings": loads preset + navigates to Customize screen (editContext set to preset)
+- [ ] "Rename": shows inline rename field; Enter/Save saves; Escape cancels; name updates in list
+- [ ] "Delete": first click shows "Confirm delete?" in red; second click deletes; Cancel via other action clears it
+- [ ] Clicking outside the `···` dropdown closes it
+
+### P. Room rows — Main screen (need at least one saved cowork room)
+- [ ] Each room row shows a state badge: "In progress" (green), "Starts today at HH:mm" / "Starts MMM D at HH:mm" (indigo), "Ended today at HH:mm" / "Ended MMM D at HH:mm" (gray)
+- [ ] State badge time is always shown (both today and non-today)
+- [ ] Recurring rooms show `↻` icon after the name; hovering shows tooltip "Recurring session"
+- [ ] `▶ Join Room` button is ONLY shown on "In progress" rooms (not upcoming or ended)
+- [ ] `▶ Join Room` starts timer immediately as host
+- [ ] `···` dropdown: "Change Settings", "Rename", "Show code" / "Hide code", "Delete"
+- [ ] "Change Settings": loads room settings → goes to Customize → editContext is cowork-room type
+- [ ] "Rename": inline rename field; Enter/Save calls Firebase `updateRoom`, updates list inline; Escape cancels
+- [ ] "Show code" / "Hide code": toggles room code display below the row
+- [ ] "Delete": confirm pattern (same as existing behavior)
+- [ ] Clicking outside dropdown closes it
+- [ ] Room order: In Progress first → Upcoming (soonest first) → Ended (most recent first)
+
+### Q. Smart post-room-generation join button (Main screen cowork form)
+- [ ] After generating a room that starts "now" (or within 5 min): shows green `▶ Join Room Now` button
+- [ ] After generating a room for a future time (> 5 min away): shows secondary "Join as Host & Start Session" + "Room saved." message
+- [ ] After generating a recurring room (starts in future): secondary button + message
+
+### R. Preset list — Summary.tsx (Settings Updated page)
+- [ ] Preset list appears in MAIN view of Settings Updated (not just post-save)
+- [ ] Same `+`/`−` toggle, same `▶ Start` + `···` dropdown as Main
+- [ ] `▶ Start` on Summary loads preset + starts session
+- [ ] "Change Settings" on Summary preset row: loads preset + goes to Customize
+
+### S. Rooms list — Summary.tsx (Settings Updated page)
+- [ ] Rooms list appears in MAIN view of Settings Updated
+- [ ] Same `+`/`−` toggle, same state badges, `▶ Join Room`, `···` dropdown as Main
+- [ ] "Change Settings" on room row: loads room settings + goes to Customize
+- [ ] "Rename", "Show/Hide code", "Delete" all work same as Main
+- [ ] Rooms list also appears in POST-SAVE view of Settings Updated
+
+### T. Summary.tsx section order (Settings Updated main view)
+- [ ] Section order: Settings display → Preset list → Rooms list → Cowork toggle → (Save options, only if cowork OFF) → WhenSection → (Cowork form, only if cowork ON) → "Change Settings" button
+- [ ] Cowork toggle is at TOP of action area (before save options)
+- [ ] Save options (Save Changes to Preset, Save as Preset, Save as Default) are HIDDEN when cowork toggle is ON
+- [ ] WhenSection always visible regardless of cowork toggle state
+- [ ] Cowork form only appears when cowork toggle is ON
+
+### U. Cowork toggle default on Summary.tsx
+- [ ] Navigate: Main → load a room → `···` → "Change Settings" → Customize → make a change → "Display Changes" (Settings Updated page)
+- [ ] On Settings Updated: cowork toggle should be **ON by default** (because editContext.type === 'cowork-room')
+- [ ] Navigate: Main → `···` on a preset → "Change Settings" → make a change → "Display Changes"
+- [ ] On Settings Updated: cowork toggle should be **OFF by default**
+
+### V. Summary.tsx post-save view
+- [ ] After saving a preset: post-save view shows both preset list AND rooms list (collapsible)
+- [ ] `▶ Start` and `···` work in post-save view too
+
+---
+
+## 8. ⏳ Settings storage: `localStorage` → Tauri AppData — NEXT after tests pass
 
 Once regression tests pass:
 - Migrate `mindful-prompter-v3` key from localStorage to Tauri file system API
@@ -143,7 +216,7 @@ Once regression tests pass:
 
 ---
 
-## 7. Distribution prep (before public launch)
+## 9. Distribution prep (before public launch)
 - Build unsigned installer — share with tech-adjacent testers
 - Decide: Microsoft Store submission (free signing) vs. paid OV certificate (~$300–500/yr)
 - Set up GitHub Actions for Mac builds (required — cannot build Mac on Windows)

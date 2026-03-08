@@ -487,6 +487,7 @@ export default function App() {
             onBack={() => setScreen('customize')}
             onCustomize={handleCustomize}
             onLoadPreset={handleLoadPreset}
+            onLoadRoom={handleLoadRoom}
             onCoworkHostStart={handleCoworkHostStart}
             onSettingsChange={setSettings}
             editContext={editContext}

@@ -8,6 +8,7 @@ import {
   getRoom,
   deleteRoom as deleteFirebaseRoom,
   getHostRooms,
+  updateRoom as updateFirebaseRoom,
   computeRoomTiming,
   computeSessionDurationMs,
 } from '@/lib/cowork';
@@ -97,6 +98,30 @@ function TaglineTooltip({
   );
 }
 
+function getRoomSortKey(room: CoworkRoom): { group: 0 | 1 | 2; sortMs: number } {
+  const timing = computeRoomTiming(room);
+  if (timing?.isActive) return { group: 0, sortMs: timing.startMs };
+  if (timing?.isFuture || timing?.nextStartMs) return { group: 1, sortMs: timing?.nextStartMs ?? timing?.startMs ?? 0 };
+  return { group: 2, sortMs: -(timing?.startMs ?? 0) };
+}
+
+function formatRoomBadge(room: CoworkRoom): { label: string; colorClass: string } {
+  const timing = computeRoomTiming(room);
+  if (timing?.isActive) return { label: 'In progress', colorClass: 'bg-emerald-100 text-emerald-700' };
+  const formatTime = (ms: number) => {
+    const d = new Date(ms);
+    const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (d.toDateString() === new Date().toDateString()) return `today at ${hhmm}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${hhmm}`;
+  };
+  if (timing?.isFuture || timing?.nextStartMs) {
+    const ms = timing?.nextStartMs ?? timing?.startMs ?? 0;
+    return { label: `Starts ${formatTime(ms)}`, colorClass: 'bg-indigo-100 text-indigo-700' };
+  }
+  const ms = timing?.startMs ?? 0;
+  return { label: `Ended ${formatTime(ms)}`, colorClass: 'bg-gray-100 text-gray-500' };
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Main({
@@ -124,6 +149,10 @@ export default function Main({
   const [expandRooms, setExpandRooms] = useState(false);
   const [expandJoin, setExpandJoin] = useState(false);
 
+  // Dropdown state
+  const [openDropdownPreset, setOpenDropdownPreset] = useState<PresetSlot | null>(null);
+  const [openDropdownRoom, setOpenDropdownRoom] = useState<string | null>(null);
+
   // Cowork toggle
   const [hostCowork, setHostCowork] = useState(false);
   const [showShareLockedTip, setShowShareLockedTip] = useState(false);
@@ -148,6 +177,8 @@ export default function Main({
   const [showRoomCodes, setShowRoomCodes] = useState<Record<string, boolean>>({});
   const [deletingRoom, setDeletingRoom] = useState<string | null>(null);
   const [hostedRoomsLoaded, setHostedRoomsLoaded] = useState(false);
+  const [renamingRoomCode, setRenamingRoomCode] = useState<string | null>(null);
+  const [renameRoomValue, setRenameRoomValue] = useState('');
 
   // Host room creation form state
   const [hostRoomName, setHostRoomName] = useState('');
@@ -180,6 +211,19 @@ export default function Main({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    if (openDropdownPreset === null && openDropdownRoom === null) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-dropdown]')) {
+        setOpenDropdownPreset(null);
+        setOpenDropdownRoom(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openDropdownPreset, openDropdownRoom]);
 
   const refreshPresets = () => setPresets(listPresets());
 
@@ -249,7 +293,6 @@ export default function Main({
         playSound: settings.playSound,
       };
 
-      // Determine start time from current startType
       let roomInput: Parameters<typeof createRoom>[0];
       if (startType === 'recurring' && recurringDays.length > 0 && recurringTime) {
         const durationMinutes = computeSessionDurationMs(timingSettings) / 60000;
@@ -323,6 +366,20 @@ export default function Main({
     }
   };
 
+  const handleRenameRoom = async (code: string) => {
+    const trimmed = renameRoomValue.trim();
+    if (trimmed) {
+      try {
+        await updateFirebaseRoom(code, { name: trimmed });
+        setHostedRooms((prev) => prev.map((r) => r.code === code ? { ...r, name: trimmed } : r));
+        if (selectedRoom?.code === code) setSelectedRoom({ code, name: trimmed });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setRenamingRoomCode(null);
+  };
+
   // ── Schedule handlers ──
 
   const handleSaveRecurring = () => {
@@ -362,6 +419,13 @@ export default function Main({
   };
 
   // ── Render ──
+
+  const sortedRooms = [...hostedRooms].sort((a, b) => {
+    const ka = getRoomSortKey(a);
+    const kb = getRoomSortKey(b);
+    if (ka.group !== kb.group) return ka.group - kb.group;
+    return ka.sortMs - kb.sortMs;
+  });
 
   return (
     <div className="space-y-6">
@@ -408,7 +472,7 @@ export default function Main({
             onClick={() => setExpandPresets((v) => !v)}
             className="w-full flex items-center justify-between text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
           >
-            <span>{expandPresets ? '▼' : '▶'} Saved presets ({presets.length})</span>
+            <span>{expandPresets ? '−' : '+'} Saved presets ({presets.length})</span>
           </button>
           {expandPresets && (
             <div className="mt-3 space-y-2">
@@ -429,18 +493,47 @@ export default function Main({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <button onClick={() => handleLoad(slot)} className="flex-1 text-left text-sm">
+                      <span className="flex-1 text-sm">
                         <span className="font-medium text-gray-700">{slot}</span>
                         <span className="mx-2 text-gray-400">&mdash;</span>
                         <span className="text-gray-600">{preset.name}</span>
-                      </button>
-                      <button onClick={() => { setRenamingSlot(slot); setRenameValue(preset.name); setConfirmDeleteSlot(null); }} className="text-xs text-gray-400 hover:text-indigo-600">Rename</button>
+                      </span>
                       <button
-                        onClick={() => handleDelete(slot)}
-                        className={`text-xs font-medium ${confirmDeleteSlot === slot ? 'text-red-600 hover:text-red-800' : 'text-gray-400 hover:text-red-500'}`}
+                        onClick={() => { handleLoad(slot); onStart(); }}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
                       >
-                        {confirmDeleteSlot === slot ? 'Confirm?' : 'Delete'}
+                        ▶ Start
                       </button>
+                      <div className="relative" data-dropdown>
+                        <button
+                          onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
+                          className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                        >
+                          ···
+                        </button>
+                        {openDropdownPreset === slot && (
+                          <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                            <button
+                              onClick={() => { setOpenDropdownPreset(null); handleLoad(slot); onCustomize(); }}
+                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Change Settings
+                            </button>
+                            <button
+                              onClick={() => { setOpenDropdownPreset(null); setRenamingSlot(slot); setRenameValue(preset.name); setConfirmDeleteSlot(null); }}
+                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              onClick={() => { setOpenDropdownPreset(null); handleDelete(slot); }}
+                              className={`w-full px-3 py-2 text-left text-xs ${confirmDeleteSlot === slot ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                            >
+                              {confirmDeleteSlot === slot ? 'Confirm delete?' : 'Delete'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -458,51 +551,98 @@ export default function Main({
             onClick={() => setExpandRooms((v) => !v)}
             className="w-full flex items-center justify-between text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
           >
-            <span>{expandRooms ? '▼' : '▶'} Your coworking rooms ({hostedRooms.length})</span>
+            <span>{expandRooms ? '−' : '+'} Your coworking rooms ({hostedRooms.length})</span>
           </button>
           {expandRooms && (
             <div className="mt-3 space-y-2">
-              {hostedRooms.map((room) => (
-                <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => { onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); }}
-                      className="flex-1 text-left text-sm font-medium text-gray-700 hover:text-emerald-700 transition-colors"
-                    >
-                      {room.name ?? room.code}
-                    </button>
-                    <button
-                      onClick={() => { const timing = computeRoomTiming(room); onCoworkHostStart(room, timing?.startMs ?? Date.now()); }}
-                      className="text-xs font-medium text-emerald-600 hover:text-emerald-800"
-                    >
-                      Join as host
-                    </button>
-                    <button
-                      onClick={() => setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] }))}
-                      className="text-xs text-gray-400 hover:text-emerald-600"
-                    >
-                      {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRoom(room.code)}
-                      className={`text-xs font-medium ${deletingRoom === room.code ? 'text-red-600 hover:text-red-800' : 'text-gray-400 hover:text-red-500'}`}
-                    >
-                      {deletingRoom === room.code ? 'Confirm delete?' : 'Delete'}
-                    </button>
+              {sortedRooms.map((room) => {
+                const timing = computeRoomTiming(room);
+                const badge = formatRoomBadge(room);
+                const isActive = timing?.isActive ?? false;
+                return (
+                  <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
+                    {renamingRoomCode === room.code ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={renameRoomValue}
+                          onChange={(e) => setRenameRoomValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameRoom(room.code); if (e.key === 'Escape') setRenamingRoomCode(null); }}
+                          autoFocus
+                          className="flex-1 rounded border border-emerald-300 px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                        />
+                        <button onClick={() => handleRenameRoom(room.code)} className="text-xs font-medium text-emerald-600 hover:text-emerald-800">Save</button>
+                        <button onClick={() => setRenamingRoomCode(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
+                        <span className="flex-1 text-sm font-medium text-gray-700 min-w-0">
+                          {room.name ?? room.code}
+                          {room.recurrenceRule && (
+                            <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
+                          )}
+                        </span>
+                        {isActive && (
+                          <button
+                            onClick={() => onCoworkHostStart(room, timing!.startMs)}
+                            className="text-xs font-medium text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
+                          >
+                            ▶ Join Room
+                          </button>
+                        )}
+                        <div className="relative" data-dropdown>
+                          <button
+                            onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
+                            className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                          >
+                            ···
+                          </button>
+                          {openDropdownRoom === room.code && (
+                            <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); onCustomize(); }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Change Settings
+                              </button>
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Rename
+                              </button>
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
+                              </button>
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); handleDeleteRoom(room.code); }}
+                                className={`w-full px-3 py-2 text-left text-xs ${deletingRoom === room.code ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                              >
+                                {deletingRoom === room.code ? 'Confirm delete?' : 'Delete'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {showRoomCodes[room.code] && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-lg font-bold tracking-widest text-emerald-700">{room.code}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(room.code)}
+                          className="text-xs text-gray-400 hover:text-emerald-600"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {showRoomCodes[room.code] && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="font-mono text-lg font-bold tracking-widest text-emerald-700">{room.code}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(room.code)}
-                        className="text-xs text-gray-400 hover:text-emerald-600"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -572,9 +712,18 @@ export default function Main({
                 </button>
               </div>
               <p className="text-xs text-gray-500">Share this code with anyone you want to invite.</p>
-              <Button onClick={handleHostJoinSession} className="w-full">
-                Join as Host &amp; Start Session
-              </Button>
+              {(() => {
+                const timing = computeRoomTiming(generatedRoom);
+                const startsWithin5Min = timing && (timing.isActive || (timing.isFuture && timing.startMs - Date.now() <= 5 * 60 * 1000));
+                return startsWithin5Min ? (
+                  <Button onClick={handleHostJoinSession} className="w-full">▶ Join Room Now</Button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-500">Room saved. You can join later from your rooms list.</p>
+                    <Button onClick={handleHostJoinSession} variant="secondary" className="w-full">Join as Host &amp; Start Session</Button>
+                  </div>
+                );
+              })()}
               <button onClick={() => setGeneratedRoom(null)} className="text-xs text-gray-400 hover:text-gray-600 underline">
                 Create a different room
               </button>

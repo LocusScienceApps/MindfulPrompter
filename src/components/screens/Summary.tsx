@@ -1,10 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Settings, PresetSlot, CoworkRoom, EditContext, CoworkDay } from '@/lib/types';
 import { getPresetSlots, savePreset, listPresets, renamePreset, deletePreset, saveSoloSchedule } from '@/lib/storage';
 import { generatePresetName, generateRoomName } from '@/lib/defaults';
-import { createRoom, getRoom, computeRoomTiming, computeSessionDurationMs } from '@/lib/cowork';
+import {
+  createRoom,
+  getRoom,
+  getHostRooms,
+  deleteRoom as deleteFirebaseRoom,
+  updateRoom as updateFirebaseRoom,
+  computeRoomTiming,
+  computeSessionDurationMs,
+} from '@/lib/cowork';
 import Button from '../ui/Button';
 import SettingsDisplay from '../ui/SettingsDisplay';
 import WhenSection from '../ui/WhenSection';
@@ -16,7 +24,8 @@ interface SettingsUpdatedProps {
   onSaveAsDefault: (s: Settings) => void;
   onBack: () => void;
   onCustomize: () => void;
-  onLoadPreset: (settings: Settings) => void;
+  onLoadPreset: (settings: Settings, slot?: PresetSlot, name?: string) => void;
+  onLoadRoom?: (room: CoworkRoom) => void;
   onCoworkHostStart: (room: CoworkRoom, startMs: number) => void;
   onSettingsChange: (s: Settings) => void;
   editContext?: EditContext | null;
@@ -24,6 +33,32 @@ interface SettingsUpdatedProps {
 }
 
 type SubView = null | 'preset-naming' | 'preset-slots' | 'save-default-confirm';
+
+// ── Room badge helpers (same as Main.tsx) ──
+
+function getRoomSortKey(room: CoworkRoom): { group: 0 | 1 | 2; sortMs: number } {
+  const timing = computeRoomTiming(room);
+  if (timing?.isActive) return { group: 0, sortMs: timing.startMs };
+  if (timing?.isFuture || timing?.nextStartMs) return { group: 1, sortMs: timing?.nextStartMs ?? timing?.startMs ?? 0 };
+  return { group: 2, sortMs: -(timing?.startMs ?? 0) };
+}
+
+function formatRoomBadge(room: CoworkRoom): { label: string; colorClass: string } {
+  const timing = computeRoomTiming(room);
+  if (timing?.isActive) return { label: 'In progress', colorClass: 'bg-emerald-100 text-emerald-700' };
+  const formatTime = (ms: number) => {
+    const d = new Date(ms);
+    const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (d.toDateString() === new Date().toDateString()) return `today at ${hhmm}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${hhmm}`;
+  };
+  if (timing?.isFuture || timing?.nextStartMs) {
+    const ms = timing?.nextStartMs ?? timing?.startMs ?? 0;
+    return { label: `Starts ${formatTime(ms)}`, colorClass: 'bg-indigo-100 text-indigo-700' };
+  }
+  const ms = timing?.startMs ?? 0;
+  return { label: `Ended ${formatTime(ms)}`, colorClass: 'bg-gray-100 text-gray-500' };
+}
 
 export default function SettingsUpdated({
   settings,
@@ -33,6 +68,7 @@ export default function SettingsUpdated({
   onBack,
   onCustomize,
   onLoadPreset,
+  onLoadRoom,
   onCoworkHostStart,
   onSettingsChange,
   editContext,
@@ -56,16 +92,31 @@ export default function SettingsUpdated({
   const [confirmOverwrite, setConfirmOverwrite] = useState<PresetSlot | null>(null);
   const presetSlots = (subView === 'preset-slots' || confirmOverwrite !== null) ? getPresetSlots() : [];
 
-  const [postSavePresets, setPostSavePresets] = useState<ReturnType<typeof listPresets>>([]);
-  const [postSaveRenamingSlot, setPostSaveRenamingSlot] = useState<PresetSlot | null>(null);
-  const [postSaveRenameValue, setPostSaveRenameValue] = useState('');
-  const [postSaveConfirmDeleteSlot, setPostSaveConfirmDeleteSlot] = useState<PresetSlot | null>(null);
+  // Preset list (collapsible — shown in main view and post-save view)
+  const [presetList, setPresetList] = useState<ReturnType<typeof listPresets>>([]);
+  const [expandPresets, setExpandPresets] = useState(false);
+  const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
+  const [renameSlotValue, setRenameSlotValue] = useState('');
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
+  const [openDropdownPreset, setOpenDropdownPreset] = useState<PresetSlot | null>(null);
+
+  // Post-save indicator
   const [postSaveSelectedSlot, setPostSaveSelectedSlot] = useState<PresetSlot | null>(null);
   const [postSaveSelectedName, setPostSaveSelectedName] = useState('');
   const [expandPostSavePresets, setExpandPostSavePresets] = useState(false);
 
-  // Cowork toggle (replaces expandHost)
-  const [hostCowork, setHostCowork] = useState(false);
+  // Hosted rooms state
+  const [hostedRooms, setHostedRooms] = useState<CoworkRoom[]>([]);
+  const [hostedRoomsLoaded, setHostedRoomsLoaded] = useState(false);
+  const [expandRooms, setExpandRooms] = useState(false);
+  const [showRoomCodes, setShowRoomCodes] = useState<Record<string, boolean>>({});
+  const [deletingRoom, setDeletingRoom] = useState<string | null>(null);
+  const [renamingRoomCode, setRenamingRoomCode] = useState<string | null>(null);
+  const [renameRoomValue, setRenameRoomValue] = useState('');
+  const [openDropdownRoom, setOpenDropdownRoom] = useState<string | null>(null);
+
+  // Cowork toggle — defaults ON if editing a cowork room
+  const [hostCowork, setHostCowork] = useState(() => editContext?.type === 'cowork-room');
   const [hostRoomName, setHostRoomName] = useState(() => generateRoomName(settings));
   const [hostSharePrompts, setHostSharePrompts] = useState(true);
   const [hostGenerating, setHostGenerating] = useState(false);
@@ -73,7 +124,7 @@ export default function SettingsUpdated({
   const [generatedRoom, setGeneratedRoom] = useState<CoworkRoom | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  // Scheduling state (unified, replaces expandSchedule)
+  // Scheduling state
   const [startType, setStartType] = useState<'now' | 'specific' | 'recurring'>('now');
   const [specificDate, setSpecificDate] = useState(() => {
     const t = new Date();
@@ -82,13 +133,92 @@ export default function SettingsUpdated({
   const [specificTime, setSpecificTime] = useState('');
   const [recurringDays, setRecurringDays] = useState<CoworkDay[]>([]);
   const [recurringTime, setRecurringTime] = useState('');
-  const [recurringTimezone, setRecurringTimezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone
-  );
-  const [tzFilter, setTzFilter] = useState('');
+  const [recurringTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [scheduleSaved, setScheduleSaved] = useState(false);
 
-  const refreshPostSavePresets = () => setPostSavePresets(listPresets());
+  // Load preset list and rooms on mount
+  useEffect(() => {
+    setPresetList(listPresets());
+    getHostRooms().then((rooms) => {
+      setHostedRooms(rooms);
+      setHostedRoomsLoaded(true);
+    }).catch(() => setHostedRoomsLoaded(true));
+  }, []);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    if (openDropdownPreset === null && openDropdownRoom === null) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-dropdown]')) {
+        setOpenDropdownPreset(null);
+        setOpenDropdownRoom(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openDropdownPreset, openDropdownRoom]);
+
+  const refreshPresetList = () => setPresetList(listPresets());
+
+  // ── Preset row handlers ──
+
+  const handlePresetRenameSlot = (slot: PresetSlot) => {
+    const trimmed = renameSlotValue.trim();
+    if (trimmed) {
+      renamePreset(slot, trimmed);
+      if (slot === postSaveSelectedSlot) setPostSaveSelectedName(trimmed);
+      refreshPresetList();
+    }
+    setRenamingSlot(null);
+  };
+
+  const handlePresetDelete = (slot: PresetSlot) => {
+    if (confirmDeleteSlot === slot) {
+      deletePreset(slot);
+      if (slot === postSaveSelectedSlot) { setPostSaveSelectedSlot(null); setPostSaveSelectedName(''); }
+      refreshPresetList();
+      setConfirmDeleteSlot(null);
+    } else {
+      setConfirmDeleteSlot(slot);
+      setRenamingSlot(null);
+    }
+  };
+
+  const handlePresetLoad = (slot: PresetSlot) => {
+    const p = presetList.find((x) => x.slot === slot);
+    if (p) {
+      onLoadPreset(p.preset.settings, slot, p.preset.name);
+      setPostSaveSelectedSlot(slot);
+      setPostSaveSelectedName(p.preset.name);
+    }
+  };
+
+  // ── Room handlers ──
+
+  const handleDeleteRoom = async (code: string) => {
+    if (deletingRoom === code) {
+      try {
+        await deleteFirebaseRoom(code);
+        setHostedRooms((prev) => prev.filter((r) => r.code !== code));
+      } catch (e) { console.error(e); }
+      setDeletingRoom(null);
+    } else {
+      setDeletingRoom(code);
+    }
+  };
+
+  const handleRenameRoom = async (code: string) => {
+    const trimmed = renameRoomValue.trim();
+    if (trimmed) {
+      try {
+        await updateFirebaseRoom(code, { name: trimmed });
+        setHostedRooms((prev) => prev.map((r) => r.code === code ? { ...r, name: trimmed } : r));
+      } catch (e) { console.error(e); }
+    }
+    setRenamingRoomCode(null);
+  };
+
+  // ── Save preset ──
 
   const handleSavePreset = (slot: PresetSlot) => {
     const name = presetName.trim() || autoName;
@@ -97,7 +227,7 @@ export default function SettingsUpdated({
     setSavedPresetName(name);
     setPostSaveSelectedSlot(slot);
     setPostSaveSelectedName(name);
-    setPostSavePresets(listPresets());
+    setPresetList(listPresets());
     setConfirmOverwrite(null);
     setSubView(null);
   };
@@ -106,6 +236,8 @@ export default function SettingsUpdated({
     if (hasExisting) { setConfirmOverwrite(slot); }
     else { handleSavePreset(slot); }
   };
+
+  // ── Room generation ──
 
   const handleGenerateRoom = async () => {
     setHostGenerating(true);
@@ -164,7 +296,10 @@ export default function SettingsUpdated({
 
       const code = await createRoom(roomInput);
       const room = await getRoom(code);
-      if (room) setGeneratedRoom(room);
+      if (room) {
+        setGeneratedRoom(room);
+        setHostedRooms((prev) => [...prev, room]);
+      }
     } catch (e) {
       setHostError(String(e));
     } finally {
@@ -172,10 +307,9 @@ export default function SettingsUpdated({
     }
   };
 
-  const handleHostJoinSession = () => {
-    if (!generatedRoom) return;
-    const timing = computeRoomTiming(generatedRoom);
-    onCoworkHostStart(generatedRoom, timing?.startMs ?? Date.now());
+  const handleHostJoinSession = (room: CoworkRoom) => {
+    const timing = computeRoomTiming(room);
+    onCoworkHostStart(room, timing?.startMs ?? Date.now());
   };
 
   const handleSaveRecurring = () => {
@@ -185,87 +319,246 @@ export default function SettingsUpdated({
     setTimeout(() => setScheduleSaved(false), 3000);
   };
 
-  // ── Shared cowork + scheduling section ──
-  const CoworkAndWhen = () => (
-    <>
-      {/* Cowork toggle */}
-      <div className="flex items-center gap-3">
+  // ── Shared sub-sections ──
+
+  const PresetList = ({ forPostSave }: { forPostSave?: boolean }) => {
+    const expand = forPostSave ? expandPostSavePresets : expandPresets;
+    const setExpand = forPostSave ? setExpandPostSavePresets : setExpandPresets;
+    if (presetList.length === 0) return null;
+    return (
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
         <button
           type="button"
-          role="switch"
-          aria-checked={hostCowork}
-          onClick={() => { setHostCowork((v) => !v); if (hostCowork) setGeneratedRoom(null); }}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${hostCowork ? 'bg-indigo-600' : 'bg-gray-200'}`}
+          onClick={() => setExpand((v) => !v)}
+          className="w-full flex items-center justify-between text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
         >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${hostCowork ? 'translate-x-6' : 'translate-x-1'}`} />
+          <span>{expand ? '−' : '+'} Saved presets ({presetList.length})</span>
         </button>
-        <span className="text-sm font-medium text-gray-700">
-          {editContext?.type === 'cowork-room' ? 'Make this a NEW ' : 'Make this a '}
-          Hosted Coworking Session
-        </span>
+        {expand && (
+          <div className="mt-3 space-y-2">
+            {presetList.map(({ slot, preset }) => (
+              <div key={slot} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
+                {renamingSlot === slot ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={renameSlotValue}
+                      onChange={(e) => setRenameSlotValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handlePresetRenameSlot(slot); if (e.key === 'Escape') setRenamingSlot(null); }}
+                      autoFocus
+                      className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+                    />
+                    <button onClick={() => handlePresetRenameSlot(slot)} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Save</button>
+                    <button onClick={() => setRenamingSlot(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 text-sm">
+                      <span className="font-medium text-gray-700">{slot}</span>
+                      <span className="mx-2 text-gray-400">&mdash;</span>
+                      <span className="text-gray-600">{preset.name}</span>
+                    </span>
+                    <button
+                      onClick={() => { handlePresetLoad(slot); onBegin(); }}
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
+                    >
+                      ▶ Start
+                    </button>
+                    <div className="relative" data-dropdown>
+                      <button
+                        onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
+                        className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                      >
+                        ···
+                      </button>
+                      {openDropdownPreset === slot && (
+                        <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                          <button
+                            onClick={() => { setOpenDropdownPreset(null); handlePresetLoad(slot); onCustomize(); }}
+                            className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            Change Settings
+                          </button>
+                          <button
+                            onClick={() => { setOpenDropdownPreset(null); setRenamingSlot(slot); setRenameSlotValue(preset.name); setConfirmDeleteSlot(null); }}
+                            className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            onClick={() => { setOpenDropdownPreset(null); handlePresetDelete(slot); }}
+                            className={`w-full px-3 py-2 text-left text-xs ${confirmDeleteSlot === slot ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                          >
+                            {confirmDeleteSlot === slot ? 'Confirm delete?' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    );
+  };
 
-      {/* WhenSection */}
-      <WhenSection
-        startType={startType}
-        onStartTypeChange={setStartType}
-        specificDate={specificDate}
-        specificTime={specificTime}
-        onSpecificDateChange={setSpecificDate}
-        onSpecificTimeChange={setSpecificTime}
-        recurringDays={recurringDays}
-        recurringTime={recurringTime}
-        onRecurringDaysChange={setRecurringDays}
-        onRecurringTimeChange={setRecurringTime}
-        hostCowork={hostCowork}
-        onStartNow={onBegin}
-        onSchedule={onScheduledStart}
-        onSaveRecurring={handleSaveRecurring}
-      />
+  const RoomList = () => {
+    if (!hostedRoomsLoaded || hostedRooms.length === 0) return null;
+    const sortedRooms = [...hostedRooms].sort((a, b) => {
+      const ka = getRoomSortKey(a);
+      const kb = getRoomSortKey(b);
+      if (ka.group !== kb.group) return ka.group - kb.group;
+      return ka.sortMs - kb.sortMs;
+    });
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+        <button
+          type="button"
+          onClick={() => setExpandRooms((v) => !v)}
+          className="w-full flex items-center justify-between text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
+        >
+          <span>{expandRooms ? '−' : '+'} Your coworking rooms ({hostedRooms.length})</span>
+        </button>
+        {expandRooms && (
+          <div className="mt-3 space-y-2">
+            {sortedRooms.map((room) => {
+              const timing = computeRoomTiming(room);
+              const badge = formatRoomBadge(room);
+              const isActive = timing?.isActive ?? false;
+              return (
+                <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
+                  {renamingRoomCode === room.code ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={renameRoomValue}
+                        onChange={(e) => setRenameRoomValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRenameRoom(room.code); if (e.key === 'Escape') setRenamingRoomCode(null); }}
+                        autoFocus
+                        className="flex-1 rounded border border-emerald-300 px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                      />
+                      <button onClick={() => handleRenameRoom(room.code)} className="text-xs font-medium text-emerald-600 hover:text-emerald-800">Save</button>
+                      <button onClick={() => setRenamingRoomCode(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
+                      <span className="flex-1 text-sm font-medium text-gray-700 min-w-0">
+                        {room.name ?? room.code}
+                        {room.recurrenceRule && (
+                          <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
+                        )}
+                      </span>
+                      {isActive && (
+                        <button
+                          onClick={() => onCoworkHostStart(room, timing!.startMs)}
+                          className="text-xs font-medium text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
+                        >
+                          ▶ Join Room
+                        </button>
+                      )}
+                      <div className="relative" data-dropdown>
+                        <button
+                          onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
+                          className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                        >
+                          ···
+                        </button>
+                        {openDropdownRoom === room.code && (
+                          <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                            <button
+                              onClick={() => { setOpenDropdownRoom(null); onLoadRoom?.(room); onCustomize(); }}
+                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Change Settings
+                            </button>
+                            <button
+                              onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
+                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
+                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
+                            </button>
+                            <button
+                              onClick={() => { setOpenDropdownRoom(null); handleDeleteRoom(room.code); }}
+                              className={`w-full px-3 py-2 text-left text-xs ${deletingRoom === room.code ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                            >
+                              {deletingRoom === room.code ? 'Confirm delete?' : 'Delete'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {showRoomCodes[room.code] && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-lg font-bold tracking-widest text-emerald-700">{room.code}</span>
+                      <button onClick={() => navigator.clipboard.writeText(room.code)} className="text-xs text-gray-400 hover:text-emerald-600">Copy</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
-      {scheduleSaved && (
-        <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 text-center">
-          Schedule saved! You&rsquo;ll be notified when your session is about to start.
-        </p>
-      )}
-
-      {/* Cowork creation form */}
-      {hostCowork && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
-          {generatedRoom ? (
-            <div className="space-y-4">
-              <p className="text-sm font-semibold text-gray-700">Room created!</p>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-3xl font-bold tracking-widest text-indigo-600">{generatedRoom.code}</span>
-                <button onClick={() => { navigator.clipboard.writeText(generatedRoom.code); setCopiedCode(true); setTimeout(() => setCopiedCode(false), 2000); }} className="text-xs text-gray-400 hover:text-indigo-600">
-                  {copiedCode ? 'Copied!' : 'Copy'}
-                </button>
+  // Cowork form (standard generate-room flow)
+  const CoworkForm = () => (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+      {generatedRoom ? (
+        <div className="space-y-4">
+          <p className="text-sm font-semibold text-gray-700">Room created!</p>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-3xl font-bold tracking-widest text-indigo-600">{generatedRoom.code}</span>
+            <button onClick={() => { navigator.clipboard.writeText(generatedRoom.code); setCopiedCode(true); setTimeout(() => setCopiedCode(false), 2000); }} className="text-xs text-gray-400 hover:text-indigo-600">
+              {copiedCode ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">Share this code with anyone you want to invite.</p>
+          {(() => {
+            const timing = computeRoomTiming(generatedRoom);
+            const startsWithin5Min = timing && (timing.isActive || (timing.isFuture && timing.startMs - Date.now() <= 5 * 60 * 1000));
+            return startsWithin5Min ? (
+              <Button onClick={() => handleHostJoinSession(generatedRoom)} className="w-full">▶ Join Room Now</Button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500">Room saved. You can join later from your rooms list.</p>
+                <Button onClick={() => handleHostJoinSession(generatedRoom)} variant="secondary" className="w-full">Join as Host &amp; Start Session</Button>
               </div>
-              <Button onClick={handleHostJoinSession} className="w-full">Join as Host &amp; Start Session</Button>
-              <button onClick={() => setGeneratedRoom(null)} className="text-xs text-gray-400 hover:text-gray-600 underline">Create a different room</button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Room name</label>
-                <input type="text" value={hostRoomName} onChange={(e) => setHostRoomName(e.target.value)} placeholder="Room 1" className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
-              </div>
-              {localS.useMindfulness && (
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={!hostSharePrompts} onChange={(e) => setHostSharePrompts(!e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-indigo-600" />
-                  <span className="text-sm text-gray-700">Do NOT share my mindfulness prompts with guests</span>
-                </label>
-              )}
-              <Button onClick={handleGenerateRoom} disabled={hostGenerating} className="w-full">
-                {hostGenerating ? 'Creating room…' : 'Generate Room Code'}
-              </Button>
-              {hostError && <p className="text-sm text-red-600">{hostError}</p>}
-              <p className="text-xs text-gray-400">Make sure your settings are correct before generating — the room will be created immediately.</p>
-            </div>
+            );
+          })()}
+          <button onClick={() => setGeneratedRoom(null)} className="text-xs text-gray-400 hover:text-gray-600 underline">Create a different room</button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Room name</label>
+            <input type="text" value={hostRoomName} onChange={(e) => setHostRoomName(e.target.value)} placeholder="Room 1" className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+          </div>
+          {localS.useMindfulness && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={!hostSharePrompts} onChange={(e) => setHostSharePrompts(!e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-indigo-600" />
+              <span className="text-sm text-gray-700">Do NOT share my mindfulness prompts with guests</span>
+            </label>
           )}
+          <Button onClick={handleGenerateRoom} disabled={hostGenerating} className="w-full">
+            {hostGenerating ? 'Creating room…' : 'Generate Room Code'}
+          </Button>
+          {hostError && <p className="text-sm text-red-600">{hostError}</p>}
+          <p className="text-xs text-gray-400">Make sure your settings are correct before generating — the room will be created immediately.</p>
         </div>
       )}
-    </>
+    </div>
   );
 
   // ── Overwrite confirmation ──
@@ -361,65 +654,62 @@ export default function SettingsUpdated({
 
         <SettingsDisplay settings={localS} onChange={handleLocalChange} />
 
-        {/* Collapsible saved presets */}
-        {postSavePresets.length > 0 && (
-          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-            <button
-              type="button"
-              onClick={() => setExpandPostSavePresets((v) => !v)}
-              className="w-full flex items-center justify-between text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
-            >
-              <span>{expandPostSavePresets ? '▼' : '▶'} Saved presets ({postSavePresets.length})</span>
-            </button>
-            {expandPostSavePresets && (
-              <div className="mt-3 space-y-2">
-                {postSavePresets.map(({ slot, preset }) => (
-                  <div key={slot} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
-                    {postSaveRenamingSlot === slot ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={postSaveRenameValue}
-                          onChange={(e) => setPostSaveRenameValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') { const t = postSaveRenameValue.trim(); if (t) { renamePreset(slot, t); if (slot === indicator.slot) setPostSaveSelectedName(t); refreshPostSavePresets(); } setPostSaveRenamingSlot(null); }
-                            if (e.key === 'Escape') setPostSaveRenamingSlot(null);
-                          }}
-                          autoFocus
-                          className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                        />
-                        <button onClick={() => { const t = postSaveRenameValue.trim(); if (t) { renamePreset(slot, t); if (slot === indicator.slot) setPostSaveSelectedName(t); refreshPostSavePresets(); } setPostSaveRenamingSlot(null); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Save</button>
-                        <button onClick={() => setPostSaveRenamingSlot(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { const p = postSavePresets.find((x) => x.slot === slot); if (p) { onLoadPreset(p.preset.settings); setPostSaveSelectedSlot(slot); setPostSaveSelectedName(p.preset.name); } }} className="flex-1 text-left text-sm">
-                          <span className="font-medium text-gray-700">{slot}</span>
-                          <span className="mx-2 text-gray-400">&mdash;</span>
-                          <span className="text-gray-600">{preset.name}</span>
-                        </button>
-                        <button onClick={() => { setPostSaveRenamingSlot(slot); setPostSaveRenameValue(preset.name); setPostSaveConfirmDeleteSlot(null); }} className="text-xs text-gray-400 hover:text-indigo-600">Rename</button>
-                        <button
-                          onClick={() => {
-                            if (postSaveConfirmDeleteSlot === slot) { deletePreset(slot); if (slot === indicator.slot) { setPostSaveSelectedSlot(null); setPostSaveSelectedName(''); } refreshPostSavePresets(); setPostSaveConfirmDeleteSlot(null); }
-                            else { setPostSaveConfirmDeleteSlot(slot); setPostSaveRenamingSlot(null); }
-                          }}
-                          className={`text-xs font-medium ${postSaveConfirmDeleteSlot === slot ? 'text-red-600 hover:text-red-800' : 'text-gray-400 hover:text-red-500'}`}
-                        >
-                          {postSaveConfirmDeleteSlot === slot ? 'Confirm?' : 'Delete'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <PresetList forPostSave />
+        <RoomList />
 
         <div className="flex flex-col gap-3">
-          <CoworkAndWhen />
-          <Button onClick={onCustomize} variant="secondary" className="w-full">Change Settings</Button>
+          {/* Cowork toggle */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={hostCowork}
+              onClick={() => { setHostCowork((v) => !v); if (hostCowork) setGeneratedRoom(null); }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${hostCowork ? 'bg-indigo-600' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${hostCowork ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <span className="text-sm font-medium text-gray-700">
+              {editContext?.type === 'cowork-room' ? 'Make this a NEW ' : 'Make this a '}
+              Hosted Coworking Session
+            </span>
+          </div>
+
+          {/* Save options — only when cowork OFF */}
+          {!hostCowork && (
+            <Button onClick={onCustomize} variant="secondary" className="w-full">Change Settings</Button>
+          )}
+
+          {/* WhenSection */}
+          <WhenSection
+            startType={startType}
+            onStartTypeChange={setStartType}
+            specificDate={specificDate}
+            specificTime={specificTime}
+            onSpecificDateChange={setSpecificDate}
+            onSpecificTimeChange={setSpecificTime}
+            recurringDays={recurringDays}
+            recurringTime={recurringTime}
+            onRecurringDaysChange={setRecurringDays}
+            onRecurringTimeChange={setRecurringTime}
+            hostCowork={hostCowork}
+            onStartNow={onBegin}
+            onSchedule={onScheduledStart}
+            onSaveRecurring={handleSaveRecurring}
+          />
+
+          {scheduleSaved && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 text-center">
+              Schedule saved! You&rsquo;ll be notified when your session is about to start.
+            </p>
+          )}
+
+          {/* Cowork form — only when cowork ON */}
+          {hostCowork && <CoworkForm />}
+
+          {!hostCowork && (
+            <Button onClick={onCustomize} variant="secondary" className="w-full">Change Settings</Button>
+          )}
         </div>
       </div>
     );
@@ -437,57 +727,110 @@ export default function SettingsUpdated({
 
       <SettingsDisplay settings={localS} onChange={handleLocalChange} />
 
-      <p className="text-center text-sm font-medium text-gray-600">What would you like to do?</p>
-
-      {subView === 'save-default-confirm' && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-          <p className="text-sm text-amber-900">This will replace your current defaults. Your new defaults will be used for all future sessions unless you reset them.</p>
-          <div className="flex gap-3">
-            <Button onClick={() => { setSubView(null); onSaveAsDefault(localS); }} className="flex-1">Confirm</Button>
-            <Button onClick={() => setSubView(null)} variant="secondary" className="flex-1">Cancel</Button>
-          </div>
-        </div>
-      )}
+      <PresetList />
+      <RoomList />
 
       <div className="flex flex-col gap-3">
-        {/* Save Changes to [preset/room] */}
-        {editContext && onSaveToContext && (
+        {/* Cowork toggle — first */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={hostCowork}
+            onClick={() => { setHostCowork((v) => !v); if (hostCowork) setGeneratedRoom(null); }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${hostCowork ? 'bg-indigo-600' : 'bg-gray-200'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${hostCowork ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+          <span className="text-sm font-medium text-gray-700">
+            {editContext?.type === 'cowork-room' ? 'Make this a NEW ' : 'Make this a '}
+            Hosted Coworking Session
+          </span>
+        </div>
+
+        {/* Save options — only when cowork OFF */}
+        {!hostCowork && (
           <>
+            {subView === 'save-default-confirm' && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <p className="text-sm text-amber-900">This will replace your current defaults. Your new defaults will be used for all future sessions unless you reset them.</p>
+                <div className="flex gap-3">
+                  <Button onClick={() => { setSubView(null); onSaveAsDefault(localS); }} className="flex-1">Confirm</Button>
+                  <Button onClick={() => setSubView(null)} variant="secondary" className="flex-1">Cancel</Button>
+                </div>
+              </div>
+            )}
+
             {saveContextError && <p className="text-sm text-red-600">{saveContextError}</p>}
-            <Button
-              onClick={async () => {
-                setSavingContext(true);
-                setSaveContextError('');
-                try {
-                  await onSaveToContext(localS);
-                } catch (e) {
-                  setSaveContextError(String(e));
-                  setSavingContext(false);
-                }
-              }}
-              disabled={savingContext}
-              className="w-full"
-            >
-              {savingContext
-                ? 'Saving…'
-                : editContext.type === 'preset'
-                  ? `Save Changes to Preset: ${editContext.name}`
-                  : `Save Changes to Coworking Room: ${editContext.name}`}
-            </Button>
+
+            {/* Save Changes to [preset/room] */}
+            {editContext && onSaveToContext && (
+              <Button
+                onClick={async () => {
+                  setSavingContext(true);
+                  setSaveContextError('');
+                  try {
+                    await onSaveToContext(localS);
+                  } catch (e) {
+                    setSaveContextError(String(e));
+                    setSavingContext(false);
+                  }
+                }}
+                disabled={savingContext}
+                className="w-full"
+              >
+                {savingContext
+                  ? 'Saving…'
+                  : editContext.type === 'preset'
+                    ? `Save Changes to Preset: ${editContext.name}`
+                    : `Save Changes to Coworking Room: ${editContext.name}`}
+              </Button>
+            )}
+
+            {/* Save as a Preset */}
+            {!savedSlot && (
+              <Button onClick={() => { setPresetName(autoName); setSavedSlot(null); setConfirmOverwrite(null); setSubView('preset-naming'); }} variant="secondary" className="w-full">
+                {editContext?.type === 'preset' ? 'Save as a NEW Preset' : 'Save as a Preset'}
+              </Button>
+            )}
+
+            {/* Save as Default */}
+            {!savedSlot && subView !== 'save-default-confirm' && (
+              <Button onClick={() => setSubView('save-default-confirm')} variant="secondary" className="w-full">
+                Save as Default
+              </Button>
+            )}
           </>
         )}
-        {!savedSlot && (
-          <Button onClick={() => { setPresetName(autoName); setSavedSlot(null); setConfirmOverwrite(null); setSubView('preset-naming'); }} variant="secondary" className="w-full">
-            {editContext?.type === 'preset' ? 'Save as a New Preset' : 'Save as a Preset'}
-          </Button>
-        )}
-        {!savedSlot && subView !== 'save-default-confirm' && (
-          <Button onClick={() => setSubView('save-default-confirm')} variant="secondary" className="w-full">
-            Save as Default
-          </Button>
+
+        {/* WhenSection — always shown */}
+        <WhenSection
+          startType={startType}
+          onStartTypeChange={setStartType}
+          specificDate={specificDate}
+          specificTime={specificTime}
+          onSpecificDateChange={setSpecificDate}
+          onSpecificTimeChange={setSpecificTime}
+          recurringDays={recurringDays}
+          recurringTime={recurringTime}
+          onRecurringDaysChange={setRecurringDays}
+          onRecurringTimeChange={setRecurringTime}
+          hostCowork={hostCowork}
+          onStartNow={onBegin}
+          onSchedule={onScheduledStart}
+          onSaveRecurring={handleSaveRecurring}
+        />
+
+        {scheduleSaved && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 text-center">
+            Schedule saved! You&rsquo;ll be notified when your session is about to start.
+          </p>
         )}
 
-        <CoworkAndWhen />
+        {/* Cowork form — only when cowork ON */}
+        {hostCowork && <CoworkForm />}
+
+        <Button onClick={onCustomize} variant="secondary" className="w-full">Change Settings</Button>
       </div>
     </div>
   );

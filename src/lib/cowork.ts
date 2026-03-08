@@ -334,6 +334,11 @@ export function buildGuestSettings(
 
 /** Build the host's Settings from the room, preserving their mindfulness settings. */
 export function buildHostSettings(room: CoworkRoom, currentSettings: Settings): Settings {
+  if (room.hostSettings) {
+    // New rooms: restore complete host settings snapshot
+    return room.hostSettings;
+  }
+  // Legacy rooms without hostSettings: overlay timing only
   const t = room.timingSettings;
   return {
     ...currentSettings,

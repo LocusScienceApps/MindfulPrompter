@@ -309,6 +309,7 @@ export default function Main({
             promptCount: settings.promptCount,
             bothMindfulnessScope: settings.bothMindfulnessScope ?? 'work-only',
           } : undefined,
+          hostSettings: settings,
           recurrenceRule: { days: recurringDays, time: recurringTime, timezone: recurringTimezone, durationMinutes },
         };
       } else {
@@ -329,6 +330,7 @@ export default function Main({
             promptCount: settings.promptCount,
             bothMindfulnessScope: settings.bothMindfulnessScope ?? 'work-only',
           } : undefined,
+          hostSettings: settings,
           startTime: isNaN(startMs) ? Date.now() : startMs,
         };
       }
@@ -493,10 +495,11 @@ export default function Main({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="flex-1 text-sm">
-                        <span className="font-medium text-gray-700">{slot}</span>
-                        <span className="mx-2 text-gray-400">&mdash;</span>
-                        <span className="text-gray-600">{preset.name}</span>
+                      <span
+                        className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        onClick={() => handleLoad(slot)}
+                      >
+                        {slot} — {preset.name}
                       </span>
                       <button
                         onClick={() => { handleLoad(slot); onStart(); }}
@@ -507,9 +510,9 @@ export default function Main({
                       <div className="relative" data-dropdown>
                         <button
                           onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
-                          className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                          className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
                         >
-                          ···
+                          Options ▾
                         </button>
                         {openDropdownPreset === slot && (
                           <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
@@ -577,7 +580,10 @@ export default function Main({
                     ) : (
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
-                        <span className="flex-1 text-sm font-medium text-gray-700 min-w-0">
+                        <span
+                          className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
+                          onClick={() => { onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); }}
+                        >
                           {room.name ?? room.code}
                           {room.recurrenceRule && (
                             <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
@@ -594,9 +600,9 @@ export default function Main({
                         <div className="relative" data-dropdown>
                           <button
                             onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
-                            className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                            className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
                           >
-                            ···
+                            Options ▾
                           </button>
                           {openDropdownRoom === room.code && (
                             <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">

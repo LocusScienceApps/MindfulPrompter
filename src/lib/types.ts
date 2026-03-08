@@ -127,6 +127,8 @@ export interface CoworkRoom {
     promptCount: number;
     bothMindfulnessScope: MindfulnessScope;
   };
+  /** Complete snapshot of host's settings at room creation time. Used to restore all host settings on load. */
+  hostSettings?: Settings;
   createdAt: number;
 }
 

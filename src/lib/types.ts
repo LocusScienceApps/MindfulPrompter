@@ -33,6 +33,24 @@ export interface Settings {
   playSound: boolean;
   /** When true, break popups fill the full break duration and cannot be dismissed early. */
   hardBreak?: boolean;
+
+  // Timing preference — specific dates are never stored; always computed as today / next occurrence
+  startType: 'now' | 'specific' | 'recurring';
+  /** "HH:MM" 24-hour — used for startType 'specific' and 'recurring' */
+  startTime?: string;
+  /** Days of week — used for startType 'recurring' */
+  startDays?: CoworkDay[];
+  /** IANA timezone — used for startType 'recurring'; omit = user's local tz */
+  startTimezone?: string;
+
+  // Coworking preference
+  isCoworking: boolean;
+  /** Whether the host's mindfulness prompts are shared with guests */
+  sharePrompts: boolean;
+
+  // Guest field locking — ephemeral, never persisted or saved in presets
+  /** Fields the guest cannot edit (Pomodoro + timing) when joining a cowork session */
+  lockedFields?: Array<keyof Settings>;
 }
 
 /** A scheduled event in the timer */
@@ -73,8 +91,6 @@ export type WorkerCommand =
 /** Which screen is currently shown */
 export type Screen =
   | 'main'
-  | 'customize'
-  | 'settings-updated'
   | 'scheduled-start'
   | 'timer'
   | 'session-complete';

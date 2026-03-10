@@ -1,20 +1,29 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, EditContext, PresetSlot } from '@/lib/types';
+import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, PresetSlot } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
 import { initStorage, getDefaults as getStoredDefaults, saveDefaults, savePreset, clearDefaults, getSoloSchedule, clearSoloSchedule } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
 import Main from './screens/Main';
 import NotificationBanner from './ui/NotificationBanner';
 import HelpModal from './ui/HelpModal';
-import Customize from './screens/Customize';
-import SettingsUpdated from './screens/Summary';
 import ScheduledStart from './screens/ScheduledStart';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
-import { buildHostSettings, buildGuestSettings, getRoom, computeRoomTiming, updateRoom, computeMostRecentOccurrence, computeNextOccurrence } from '@/lib/cowork';
+import {
+  buildHostSettings,
+  buildGuestSettings,
+  loadCoworkSessionAsSettings,
+  getRoom,
+  computeRoomTiming,
+  updateRoom,
+  createRoom,
+  computeMostRecentOccurrence,
+  computeNextOccurrence,
+} from '@/lib/cowork';
 import type { GuestContentMode, CoworkTimingSettings } from '@/lib/types';
+import type { NewRoomInput } from '@/lib/cowork';
 
 const COWORK_SESSION_KEY = 'mindful-prompter-cowork-session';
 
@@ -34,7 +43,10 @@ export default function App() {
   const [coworkRoomCode, setCoworkRoomCode] = useState<string | null>(null);
   const [isCoworkHost, setIsCoworkHost] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [editContext, setEditContext] = useState<EditContext | null>(null);
+
+  // Code of the currently-loaded cowork session on Main (distinct from coworkRoomCode
+  // which tracks the active timer session). Used for "Save changes to session" logic.
+  const [loadedRoomCode, setLoadedRoomCode] = useState<string | null>(null);
 
   // Solo schedule notice state
   const [upcomingSessionMs, setUpcomingSessionMs] = useState<number | null>(null);
@@ -71,7 +83,6 @@ export default function App() {
               setSessionStats(null);
               setScreen('timer');
             } else if (timing?.isFuture) {
-              // Restore cowork state but show scheduled-start countdown
               setCoworkRoomCode(persisted.roomCode);
               setCoworkStartTime(timing.startMs);
               setIsCoworkHost(persisted.role === 'host');
@@ -154,10 +165,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, [storageReady]);
 
-  const handleStartWithDefaults = () => {
+  // ── Session start handlers ──
+
+  const handleStartSolo = () => {
     setCoworkRoomCode(null);
     setCoworkStartTime(null);
     setIsCoworkHost(false);
+    setLoadedRoomCode(null);
     setSessionStats(null);
     setScreen('timer');
   };
@@ -167,96 +181,6 @@ export default function App() {
     setScreen('scheduled-start');
   };
 
-  const handleCustomize = () => {
-    setScreen('customize');
-  };
-
-  const handleCustomizeDone = (customSettings: Settings) => {
-    setSettings(customSettings);
-    setScreen('settings-updated');
-  };
-
-  const handleStartDirectly = (customSettings: Settings) => {
-    setSettings(customSettings);
-    setCoworkRoomCode(null);
-    setCoworkStartTime(null);
-    setIsCoworkHost(false);
-    setSessionStats(null);
-    setScreen('timer');
-  };
-
-  const handleResetToOriginal = () => {
-    clearDefaults();
-    setSettings(getDefaults());
-    setEditContext(null);
-    setScreen('main');
-  };
-
-  const handleLoadDefaults = () => { setSettings(getInitialSettings()); setEditContext(null); };
-
-  const isAtDefaults =
-    JSON.stringify(settings) === JSON.stringify(getInitialSettings());
-
-  const handleSaveAsDefault = (s: Settings) => {
-    saveDefaults(s);
-    setSettings(s);
-    setScreen('main');
-  };
-
-  const handleLoadPreset = (presetSettings: Settings, slot?: PresetSlot, name?: string) => {
-    setSettings(presetSettings);
-    setEditContext(slot && name ? { type: 'preset', slot, name } : null);
-  };
-
-  const handleLoadRoom = (room: CoworkRoom) => {
-    const base = buildHostSettings(room, settings);
-    const loaded = room.sharePrompts && room.promptSettings ? {
-      ...base,
-      useMindfulness: true,
-      promptText: room.promptSettings.promptText,
-      promptIntervalMinutes: room.promptSettings.promptIntervalMinutes,
-      dismissSeconds: room.promptSettings.dismissSeconds,
-      promptCount: room.promptSettings.promptCount,
-      bothMindfulnessScope: room.promptSettings.bothMindfulnessScope,
-    } : base;
-    setSettings(loaded);
-    setEditContext({ type: 'cowork-room', code: room.code, name: room.name ?? room.code });
-  };
-
-  const handleSaveToContext = async (s: Settings) => {
-    setSettings(s);
-    if (editContext?.type === 'preset') {
-      savePreset(editContext.slot, { name: editContext.name, settings: s });
-      setEditContext(null);
-      setScreen('main');
-    } else if (editContext?.type === 'cowork-room') {
-      const timingSettings: CoworkTimingSettings = {
-        workMinutes: s.workMinutes,
-        breakMinutes: s.breakMinutes,
-        sessionsPerSet: s.sessionsPerSet,
-        multipleSets: s.multipleSets,
-        longBreakMinutes: s.longBreakMinutes,
-        numberOfSets: s.numberOfSets,
-        hardBreak: s.hardBreak ?? false,
-        playSound: s.playSound,
-      };
-      await updateRoom(editContext.code, {
-        mindfulnessOnly: !s.useTimedWork,
-        timingSettings,
-        sharePrompts: s.useMindfulness,
-        promptSettings: s.useMindfulness ? {
-          promptText: s.promptText,
-          promptIntervalMinutes: s.promptIntervalMinutes,
-          dismissSeconds: s.dismissSeconds,
-          promptCount: s.promptCount,
-          bothMindfulnessScope: s.bothMindfulnessScope ?? 'work-only',
-        } : undefined,
-      });
-      setEditContext(null);
-      setScreen('main');
-    }
-  };
-
   const handleBeginSession = () => {
     setCoworkRoomCode(null);
     setCoworkStartTime(null);
@@ -264,6 +188,152 @@ export default function App() {
     setSessionStats(null);
     setScreen('timer');
   };
+
+  // ── Settings save handlers (called from Main) ──
+
+  const handleSaveAsDefault = (s: Settings) => {
+    saveDefaults(s);
+    setSettings(s);
+  };
+
+  const handleSavePreset = (slot: PresetSlot, name: string, s: Settings) => {
+    savePreset(slot, { name, settings: s });
+  };
+
+  const handleResetToOriginal = () => {
+    clearDefaults();
+    setSettings(getDefaults());
+    setLoadedRoomCode(null);
+  };
+
+  const handleLoadDefaults = () => {
+    setSettings(getInitialSettings());
+    setLoadedRoomCode(null);
+  };
+
+  const isAtDefaults =
+    JSON.stringify({ ...settings, lockedFields: undefined }) ===
+    JSON.stringify({ ...getInitialSettings(), lockedFields: undefined });
+
+  // ── Preset / session loading ──
+
+  const handleLoadPreset = (presetSettings: Settings, slot?: PresetSlot, name?: string) => {
+    void slot; void name; // slot/name no longer tracked in App state
+    setSettings({ ...presetSettings, lockedFields: undefined });
+    setLoadedRoomCode(null);
+  };
+
+  /** Called when the user clicks a session card on Main to load a hosted room. */
+  const handleLoadSession = (room: CoworkRoom) => {
+    const loaded = loadCoworkSessionAsSettings(room, 'host', settings);
+    setSettings(loaded);
+    setLoadedRoomCode(room.code);
+  };
+
+  /** Called when the host clicks Join on an existing room card in the Sessions section. */
+  const handleJoinAsHost = (room: CoworkRoom, startMs: number) => {
+    const hostSettings = buildHostSettings(room, settings);
+    setSettings(hostSettings);
+    setCoworkRoomCode(room.code);
+    setIsCoworkHost(true);
+    setLoadedRoomCode(null);
+    setSessionStats(null);
+    const persisted: PersistedCoworkSession = {
+      roomCode: room.code,
+      role: 'host',
+      contentMode: 'host-prompts',
+      startMs,
+    };
+    localStorage.setItem(COWORK_SESSION_KEY, JSON.stringify(persisted));
+    setCoworkStartTime(startMs);
+    if (startMs > Date.now()) {
+      setScreen('scheduled-start');
+    } else {
+      setScreen('timer');
+    }
+  };
+
+  /** Save settings changes back to the currently-loaded cowork room in Firebase. */
+  const handleSaveToRoom = async (s: Settings) => {
+    if (!loadedRoomCode) return;
+    const timingSettings: CoworkTimingSettings = {
+      workMinutes: s.workMinutes,
+      breakMinutes: s.breakMinutes,
+      sessionsPerSet: s.sessionsPerSet,
+      multipleSets: s.multipleSets,
+      longBreakMinutes: s.longBreakMinutes,
+      numberOfSets: s.numberOfSets,
+      hardBreak: s.hardBreak ?? false,
+      playSound: s.playSound,
+    };
+    await updateRoom(loadedRoomCode, {
+      mindfulnessOnly: !s.useTimedWork,
+      timingSettings,
+      sharePrompts: s.sharePrompts,
+      promptSettings: s.useMindfulness ? {
+        promptText: s.promptText,
+        promptIntervalMinutes: s.promptIntervalMinutes,
+        dismissSeconds: s.dismissSeconds,
+        promptCount: s.promptCount,
+        bothMindfulnessScope: s.bothMindfulnessScope ?? 'work-only',
+      } : undefined,
+    });
+    setSettings(s);
+  };
+
+  // ── Cowork host: create room and start ──
+
+  const handleHostStart = async (input: NewRoomInput, startMs: number | null) => {
+    const code = await createRoom(input);
+    const room = await getRoom(code);
+    if (!room) return;
+    const hostSettings = buildHostSettings(room, settings);
+    setSettings(hostSettings);
+    setCoworkRoomCode(code);
+    setIsCoworkHost(true);
+    setLoadedRoomCode(null);
+    setSessionStats(null);
+    const effectiveStartMs = startMs ?? Date.now();
+    const persisted: PersistedCoworkSession = {
+      roomCode: code,
+      role: 'host',
+      contentMode: 'host-prompts',
+      startMs: effectiveStartMs,
+    };
+    localStorage.setItem(COWORK_SESSION_KEY, JSON.stringify(persisted));
+    setCoworkStartTime(effectiveStartMs);
+    if (startMs && startMs > Date.now()) {
+      setScreen('scheduled-start');
+    } else {
+      setScreen('timer');
+    }
+  };
+
+  // ── Cowork guest: join session ──
+
+  const handleCoworkGuestStart = (
+    room: CoworkRoom,
+    guestMode: GuestContentMode,
+    startMs: number,
+  ) => {
+    const guestSettings = buildGuestSettings(room, guestMode);
+    setSettings(guestSettings);
+    setCoworkRoomCode(room.code);
+    setCoworkStartTime(startMs);
+    setIsCoworkHost(false);
+    setLoadedRoomCode(null);
+    setSessionStats(null);
+    const persisted: PersistedCoworkSession = {
+      roomCode: room.code,
+      role: 'guest',
+      contentMode: guestMode,
+      startMs,
+    };
+    localStorage.setItem(COWORK_SESSION_KEY, JSON.stringify(persisted));
+    setScreen('timer');
+  };
+
+  // ── Session end ──
 
   const handleSessionEnd = (stats: SessionStats) => {
     localStorage.removeItem(COWORK_SESSION_KEY);
@@ -283,50 +353,6 @@ export default function App() {
     setScreen('main');
   };
 
-  const handleCoworkHostStart = (room: CoworkRoom, startMs: number) => {
-    const hostSettings = buildHostSettings(room, settings);
-    setSettings(hostSettings);
-    setCoworkRoomCode(room.code);
-    setIsCoworkHost(true);
-    setSessionStats(null);
-    const timing = computeRoomTiming(room);
-    const effectiveStartMs = timing?.startMs ?? startMs;
-    const persisted: PersistedCoworkSession = {
-      roomCode: room.code,
-      role: 'host',
-      contentMode: 'host-prompts',
-      startMs: effectiveStartMs,
-    };
-    localStorage.setItem(COWORK_SESSION_KEY, JSON.stringify(persisted));
-    setCoworkStartTime(effectiveStartMs);
-    if (timing?.isFuture) {
-      setScreen('scheduled-start');
-    } else {
-      setScreen('timer');
-    }
-  };
-
-  const handleCoworkGuestStart = (
-    room: CoworkRoom,
-    guestMode: GuestContentMode,
-    startMs: number,
-  ) => {
-    const guestSettings = buildGuestSettings(room, guestMode);
-    setSettings(guestSettings);
-    setCoworkRoomCode(room.code);
-    setCoworkStartTime(startMs);
-    setIsCoworkHost(false);
-    setSessionStats(null);
-    const persisted: PersistedCoworkSession = {
-      roomCode: room.code,
-      role: 'guest',
-      contentMode: guestMode,
-      startMs,
-    };
-    localStorage.setItem(COWORK_SESSION_KEY, JSON.stringify(persisted));
-    setScreen('timer');
-  };
-
   const handleHostEndSession = () => {
     localStorage.removeItem(COWORK_SESSION_KEY);
     setCoworkRoomCode(null);
@@ -335,7 +361,7 @@ export default function App() {
     setScreen('main');
   };
 
-  // ── Solo schedule notice helpers ──
+  // ── Solo schedule helpers ──
 
   const handleCancelSchedule = () => {
     clearSoloSchedule();
@@ -451,48 +477,27 @@ export default function App() {
 
         {screen === 'main' && (
           <>
-          <NotificationBanner />
-          <Main
-            settings={settings}
-            onStart={handleStartWithDefaults}
-            onScheduledStart={handleScheduledStart}
-            onCustomize={handleCustomize}
-            onLoadPreset={handleLoadPreset}
-            onLoadRoom={handleLoadRoom}
-            onSettingsChange={setSettings}
-            onCoworkHostStart={handleCoworkHostStart}
-            onCoworkGuestStart={handleCoworkGuestStart}
-            isAtDefaults={isAtDefaults}
-            onLoadDefaults={handleLoadDefaults}
-          />
+            <NotificationBanner />
+            <Main
+              settings={settings}
+              onSettingsChange={setSettings}
+              onStart={handleStartSolo}
+              onScheduledStart={handleScheduledStart}
+              onSaveAsDefault={handleSaveAsDefault}
+              onSavePreset={handleSavePreset}
+              onResetToOriginal={handleResetToOriginal}
+              onLoadPreset={handleLoadPreset}
+              onLoadSession={handleLoadSession}
+              onSaveToRoom={handleSaveToRoom}
+              onHostStart={handleHostStart}
+              onJoinAsHost={handleJoinAsHost}
+              onCoworkGuestStart={handleCoworkGuestStart}
+              onClearSoloSchedule={handleCancelSchedule}
+              isAtDefaults={isAtDefaults}
+              onLoadDefaults={handleLoadDefaults}
+              loadedRoomCode={loadedRoomCode}
+            />
           </>
-        )}
-
-        {screen === 'customize' && (
-          <Customize
-            settings={settings}
-            onDone={handleCustomizeDone}
-            onStartDirectly={handleStartDirectly}
-            onResetToOriginal={handleResetToOriginal}
-            onBack={() => setScreen('main')}
-          />
-        )}
-
-        {screen === 'settings-updated' && (
-          <SettingsUpdated
-            settings={settings}
-            onBegin={handleBeginSession}
-            onScheduledStart={handleScheduledStart}
-            onSaveAsDefault={handleSaveAsDefault}
-            onBack={() => setScreen('customize')}
-            onCustomize={handleCustomize}
-            onLoadPreset={handleLoadPreset}
-            onLoadRoom={handleLoadRoom}
-            onCoworkHostStart={handleCoworkHostStart}
-            onSettingsChange={setSettings}
-            editContext={editContext}
-            onSaveToContext={handleSaveToContext}
-          />
         )}
 
         {screen === 'scheduled-start' && (

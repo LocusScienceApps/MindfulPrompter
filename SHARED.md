@@ -12,11 +12,11 @@ Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **bl
 
 ## Current Status
 
-**Phase 2 in progress.** Session 31 complete — see [TODO.md](TODO.md) for next steps.
+**Phase 2 in progress.** Session 32 complete — see [TODO.md](TODO.md) for next steps.
 
 - Phase 1 ✅ (Sessions 1–21): all features matching batch file
-- Phase 2 🔄 (Sessions 22–31): Tauri + Firebase cowork — needs regression testing (TODO.md sections A–V)
-- **Major redesign (v2) planned** — see [docs/redesign-v2.md](docs/redesign-v2.md) for full spec; discuss in planning mode before implementing
+- Phase 2 🔄 (Sessions 22–32): Tauri + Firebase cowork + redesign v2 Phase 1 — **needs regression testing (TODO.md A–P)**
+- Redesign v2 Phase 1 ✅: single-screen design, edit-lock, timing/coworking in Settings, Sessions section, guest locked fields — all implemented
 - Phase 3/4: optional accounts + paid tiers — post-traction only
 
 → Architecture decisions, distribution plan, phase details: [docs/architecture.md](docs/architecture.md)
@@ -36,9 +36,11 @@ Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **bl
 
 ## Architecture (quick reference)
 
-- Single-page app, 6 screens via React state in `src/components/App.tsx`
-- Screens: `main | customize | settings-updated | scheduled-start | timer | session-complete`
+- Single-page app, 4 screens via React state in `src/components/App.tsx`
+- Screens: `main | scheduled-start | timer | session-complete` (Customize + Summary deleted in Session 32)
 - Settings model: two independent booleans `useTimedWork` + `useMindfulness` (no AppMode)
+- Main.tsx has edit-lock toggle: locked (display-only) by default; edit mode shows inline forms
+- `Settings` now includes timing intent (`startType/startTime/startDays/startTimezone`) and coworking intent (`isCoworking/sharePrompts`); ephemeral `lockedFields` for guest field locking
 - `src/lib/schedule.ts` — builds flat `TimerEvent[]` from settings
 - Storage key: `mindful-prompter-v3` (localStorage for browser dev; Tauri AppData = next step)
 
@@ -52,9 +54,7 @@ src/
     App.tsx                  ← state machine, screen routing, cowork session polling
     NotificationOverlay.tsx  ← in-app popup (browser fallback to Tauri window)
     screens/
-      Main.tsx               ← main screen: settings, presets, rooms, cowork form, WhenSection
-      Customize.tsx          ← settings editor: two On/Off sections (Timed Work, Mindfulness)
-      Summary.tsx            ← settings-updated screen: same preset/room lists + save options
+      Main.tsx               ← ONLY settings screen: edit-lock toggle, inline Pomodoro/Prosochai/Timing/Coworking, Sessions section, save options bar, join panel
       ScheduledStart.tsx     ← countdown-only screen (receives startMs prop)
       Timer.tsx              ← active session: room code toggle, host end-session
       SessionComplete.tsx    ← session stats
@@ -63,11 +63,11 @@ src/
       WhenSection.tsx        ← "When should this session start?" (now / specific / recurring)
       Button.tsx, NumberInput.tsx, ProgressRing.tsx, ToggleSwitch.tsx, etc.
   lib/
-    types.ts      ← Settings, CoworkRoom (hostSettings?: Settings), TimerEvent, EditContext
+    types.ts      ← Settings (incl. startType/isCoworking/lockedFields), CoworkRoom, TimerEvent
     defaults.ts   ← getDefaults(), generatePresetName(), generateRoomName()
     schedule.ts   ← timing event computation; branches on useTimedWork/useMindfulness
     storage.ts    ← persistence; key mindful-prompter-v3; v2 migration (wipe on detect)
-    cowork.ts     ← room CRUD, host-rooms index, recurrence, buildHostSettings(), buildGuestSettings()
+    cowork.ts     ← room CRUD, host-rooms index, recurrence, buildHostSettings(), loadCoworkSessionAsSettings()
     firebase.ts   ← Firebase init, anonymous auth
     validation.ts, format.ts, sound.ts, registerSW.ts
 src-tauri/

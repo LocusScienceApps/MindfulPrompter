@@ -339,6 +339,80 @@ export function buildGuestSettings(
   };
 }
 
+/**
+ * Build a Settings object for displaying a cowork session on the Main screen.
+ *
+ * This is for the "Load Session" flow: entering a code loads the room's settings
+ * into Main just like clicking a preset.
+ *
+ * - Hosts get the full room settings with no locked fields.
+ * - Guests get the host's Pomodoro/timing (locked) + their own prompts/sound (editable).
+ */
+export function loadCoworkSessionAsSettings(
+  room: CoworkRoom,
+  role: 'host' | 'guest',
+  userCurrentSettings: Settings,
+): Settings {
+  // Translate room timing → Settings timing fields
+  const timingFields: Partial<Settings> = { startType: 'now' as const };
+  if (room.startTime !== undefined) {
+    const d = new Date(room.startTime);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    timingFields.startType = 'specific';
+    timingFields.startTime = `${hh}:${mm}`;
+  } else if (room.recurrenceRule) {
+    timingFields.startType = 'recurring';
+    timingFields.startTime = room.recurrenceRule.time;
+    timingFields.startDays = room.recurrenceRule.days;
+    timingFields.startTimezone = room.recurrenceRule.timezone;
+  }
+
+  // Base: prefer hostSettings snapshot (new rooms); fall back to timingSettings (legacy)
+  const base: Settings = room.hostSettings
+    ? { ...room.hostSettings, ...timingFields, isCoworking: true, sharePrompts: room.sharePrompts }
+    : {
+        ...getDefaults(),
+        useTimedWork: !room.mindfulnessOnly,
+        workMinutes: room.timingSettings.workMinutes,
+        breakMinutes: room.timingSettings.breakMinutes,
+        sessionsPerSet: room.timingSettings.sessionsPerSet,
+        multipleSets: room.timingSettings.multipleSets,
+        longBreakMinutes: room.timingSettings.longBreakMinutes,
+        numberOfSets: room.timingSettings.numberOfSets,
+        hardBreak: room.timingSettings.hardBreak,
+        ...timingFields,
+        isCoworking: true,
+        sharePrompts: room.sharePrompts,
+      };
+
+  if (role === 'host') {
+    return { ...base, lockedFields: undefined };
+  }
+
+  // Guest: keep host Pomodoro/timing but use guest's own sound and prompts
+  // (unless host is sharing prompts, in which case show host prompts)
+  const guestOverrides: Partial<Settings> = {
+    playSound: userCurrentSettings.playSound,
+    useMindfulness: room.sharePrompts ? base.useMindfulness : userCurrentSettings.useMindfulness,
+    promptText: room.sharePrompts ? base.promptText : userCurrentSettings.promptText,
+    promptIntervalMinutes: room.sharePrompts ? base.promptIntervalMinutes : userCurrentSettings.promptIntervalMinutes,
+    dismissSeconds: room.sharePrompts ? base.dismissSeconds : userCurrentSettings.dismissSeconds,
+    promptCount: room.sharePrompts ? base.promptCount : userCurrentSettings.promptCount,
+    bothMindfulnessScope: room.sharePrompts ? base.bothMindfulnessScope : userCurrentSettings.bothMindfulnessScope,
+  };
+
+  const lockedFields: Array<keyof Settings> = [
+    'useTimedWork',
+    'workMinutes', 'breakMinutes', 'sessionsPerSet',
+    'multipleSets', 'longBreakMinutes', 'numberOfSets', 'hardBreak',
+    'startType', 'startTime', 'startDays', 'startTimezone',
+    'isCoworking', 'sharePrompts',
+  ];
+
+  return { ...base, ...guestOverrides, lockedFields };
+}
+
 /** Build the host's Settings from the room, preserving their mindfulness settings. */
 export function buildHostSettings(room: CoworkRoom, currentSettings: Settings): Settings {
   if (room.hostSettings) {

@@ -48,6 +48,13 @@ export interface WhenSectionProps {
   onStartNow: () => void;
   onSchedule: (ms: number) => void;
   onSaveRecurring: () => void;
+  /**
+   * When false, hides the Start/Schedule/Save action buttons.
+   * Use this when WhenSection is embedded in an edit-mode context where
+   * the action is handled by a button elsewhere (e.g. bottom of Main).
+   * @default true
+   */
+  showActions?: boolean;
   // optional heading override
   heading?: string;
   headingHint?: string;
@@ -68,6 +75,7 @@ export default function WhenSection({
   onStartNow,
   onSchedule,
   onSaveRecurring,
+  showActions = true,
   heading,
   headingHint,
 }: WhenSectionProps) {
@@ -104,7 +112,7 @@ export default function WhenSection({
             />
             <span className="text-sm font-medium text-gray-700">Start session now</span>
           </label>
-          {startType === 'now' && !hostCowork && (
+          {startType === 'now' && !hostCowork && showActions && (
             <div className="mt-3 ml-6">
               <Button onClick={onStartNow} className="w-full text-base">
                 Start Session
@@ -145,7 +153,7 @@ export default function WhenSection({
                   <span className="text-sm font-medium text-gray-500">{userTzAbbr}</span>
                 )}
               </div>
-              {specificMs && !hostCowork && (
+              {specificMs && !hostCowork && showActions && (
                 <Button onClick={() => onSchedule(specificMs)} className="w-full">
                   Schedule Session
                 </Button>
@@ -203,7 +211,7 @@ export default function WhenSection({
                 )}
                 <span className="text-sm text-gray-500">each selected day</span>
               </div>
-              {recurringReady && !hostCowork && (
+              {recurringReady && !hostCowork && showActions && (
                 <Button onClick={onSaveRecurring} className="w-full">
                   Save Schedule
                 </Button>

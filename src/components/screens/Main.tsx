@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import type { Settings, PresetSlot, CoworkRoom, GuestContentMode, CoworkDay } from '@/lib/types';
-import { listPresets, renamePreset, deletePreset, saveSoloSchedule } from '@/lib/storage';
+import { useState, useEffect } from 'react';
+import type { Settings, PresetSlot, CoworkRoom, GuestContentMode, CoworkDay, MindfulnessScope } from '@/lib/types';
 import {
-  createRoom,
+  listPresets, renamePreset, deletePreset,
+  saveSoloSchedule, getSoloSchedule,
+  getDefaults as getStoredDefaults,
+} from '@/lib/storage';
+import {
   getRoom,
   deleteRoom as deleteFirebaseRoom,
   getHostRooms,
@@ -12,26 +15,40 @@ import {
   computeRoomTiming,
   computeSessionDurationMs,
 } from '@/lib/cowork';
-import { generateRoomName } from '@/lib/defaults';
+import type { NewRoomInput } from '@/lib/cowork';
+import {
+  getDefaults,
+  generateRoomName,
+  defaultBreakMinutes,
+  defaultLongBreakMinutes,
+  defaultPromptInterval,
+} from '@/lib/defaults';
+import { formatNum } from '@/lib/format';
+import { dividesEvenly, formatDivisorList } from '@/lib/validation';
 import Button from '../ui/Button';
 import SettingsDisplay from '../ui/SettingsDisplay';
 import WhenSection from '../ui/WhenSection';
 
-interface MainProps {
-  settings: Settings;
-  onStart: () => void;
-  onScheduledStart: (startMs: number) => void;
-  onCustomize: () => void;
-  onLoadPreset: (settings: Settings, slot?: PresetSlot, name?: string) => void;
-  onLoadRoom?: (room: CoworkRoom) => void;
-  onSettingsChange: (settings: Settings) => void;
-  onCoworkHostStart: (room: CoworkRoom, startMs: number) => void;
-  onCoworkGuestStart: (room: CoworkRoom, mode: GuestContentMode, startMs: number) => void;
-  isAtDefaults: boolean;
-  onLoadDefaults: () => void;
-}
+// ── Local UI primitives ───────────────────────────────────────────────────────
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+function Toggle({
+  checked, onChange, disabled, title,
+}: { checked: boolean; onChange: () => void; disabled?: boolean; title?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={disabled ? undefined : onChange}
+      title={title}
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+        checked ? 'bg-indigo-600' : 'bg-gray-300'
+      } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+    >
+      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+  );
+}
 
 function Tooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);
@@ -59,14 +76,8 @@ function Tooltip({ text }: { text: string }) {
 }
 
 function TaglineTooltip({
-  text,
-  tooltip,
-  wikiUrl,
-}: {
-  text: string;
-  tooltip: React.ReactNode;
-  wikiUrl?: string;
-}) {
+  text, tooltip, wikiUrl,
+}: { text: string; tooltip: React.ReactNode; wikiUrl?: string }) {
   const [show, setShow] = useState(false);
   return (
     <span className="relative inline-block">
@@ -85,12 +96,7 @@ function TaglineTooltip({
         <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left">
           {tooltip}{' '}
           {wikiUrl && (
-            <a
-              href={wikiUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-indigo-300 hover:text-indigo-100 underline"
-            >
+            <a href={wikiUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-100 underline">
               Learn more on Wikipedia →
             </a>
           )}
@@ -99,6 +105,61 @@ function TaglineTooltip({
     </span>
   );
 }
+
+function NumericInput({
+  value, defaultValue, unit, min = 1, integerOnly = false, allowZero = false, disabled = false, onChange,
+}: {
+  value: number; defaultValue: number; unit: string; min?: number; integerOnly?: boolean;
+  allowZero?: boolean; disabled?: boolean; onChange: (v: number) => void;
+}) {
+  const [raw, setRaw] = useState(String(value));
+  useEffect(() => { setRaw(String(value)); }, [value]);
+  const handleBlur = () => {
+    const n = integerOnly ? parseInt(raw, 10) : parseFloat(raw);
+    const minVal = allowZero ? 0 : min;
+    if (!isNaN(n) && n >= minVal) onChange(n);
+    else setRaw(String(value));
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        value={raw}
+        min={allowZero ? 0 : min}
+        step={integerOnly ? 1 : 'any'}
+        disabled={disabled}
+        onChange={(e) => setRaw(e.target.value)}
+        onBlur={handleBlur}
+        className={`w-20 rounded-lg border-2 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:outline-none ${disabled ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed' : 'border-gray-300'}`}
+      />
+      {unit && <span className="text-sm text-gray-500">{unit}</span>}
+      {!disabled && value !== defaultValue && (
+        <button type="button" onClick={() => onChange(defaultValue)} className="text-xs text-indigo-500 hover:text-indigo-700 underline">
+          reset
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SettingField({ label, helper, children }: { label: string; helper?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-medium text-gray-700">{label}</p>
+      {helper && <p className="text-xs text-gray-400 leading-snug">{helper}</p>}
+      <div className="pt-1">{children}</div>
+    </div>
+  );
+}
+
+const SCOPE_OPTIONS: { value: MindfulnessScope; label: string }[] = [
+  { value: 'work-only',   label: 'At work intervals only' },
+  { value: 'breaks',      label: 'Intervals + at each break' },
+  { value: 'work-starts', label: 'Intervals + returning from breaks' },
+  { value: 'all',         label: 'All popups' },
+];
+
+// ── Room helpers ──────────────────────────────────────────────────────────────
 
 function getRoomSortKey(room: CoworkRoom): { group: 0 | 1 | 2; sortMs: number } {
   const timing = computeRoomTiming(room);
@@ -120,77 +181,112 @@ function formatRoomBadge(room: CoworkRoom): { label: string; colorClass: string 
     const ms = timing?.nextStartMs ?? timing?.startMs ?? 0;
     return { label: `Starts ${formatTime(ms)}`, colorClass: 'bg-indigo-100 text-indigo-700' };
   }
-  const ms = timing?.startMs ?? 0;
-  return { label: `Ended ${formatTime(ms)}`, colorClass: 'bg-gray-100 text-gray-500' };
+  return { label: 'Ended', colorClass: 'bg-gray-100 text-gray-500' };
+}
+
+function todayString(): string {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface MainProps {
+  settings: Settings;
+  onSettingsChange: (s: Settings) => void;
+  onStart: () => void;
+  onScheduledStart: (startMs: number) => void;
+  onSaveAsDefault: (s: Settings) => void;
+  onSavePreset: (slot: PresetSlot, name: string, s: Settings) => void;
+  onResetToOriginal: () => void;
+  onLoadPreset: (s: Settings, slot?: PresetSlot, name?: string) => void;
+  onLoadSession: (room: CoworkRoom) => void;
+  onSaveToRoom: (s: Settings) => void;
+  onHostStart: (input: NewRoomInput, startMs: number | null) => Promise<void>;
+  onJoinAsHost: (room: CoworkRoom, startMs: number) => void;
+  onCoworkGuestStart: (room: CoworkRoom, mode: GuestContentMode, startMs: number) => void;
+  onClearSoloSchedule: () => void;
+  isAtDefaults: boolean;
+  onLoadDefaults: () => void;
+  loadedRoomCode: string | null;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Main({
   settings,
+  onSettingsChange,
   onStart,
   onScheduledStart,
-  onCustomize,
+  onSaveAsDefault,
+  onSavePreset,
+  onResetToOriginal,
   onLoadPreset,
-  onLoadRoom,
-  onSettingsChange,
-  onCoworkHostStart,
+  onLoadSession,
+  onSaveToRoom,
+  onHostStart,
+  onJoinAsHost,
   onCoworkGuestStart,
+  onClearSoloSchedule,
   isAtDefaults,
   onLoadDefaults,
+  loadedRoomCode,
 }: MainProps) {
+  // ── Edit mode ──
+  const [editMode, setEditMode] = useState(false);
+  const [pendingSettings, setPendingSettings] = useState<Settings>(settings);
+
+  // Sync pending when settings change externally (preset load, etc.)
+  useEffect(() => {
+    if (!editMode) setPendingSettings(settings);
+  }, [settings, editMode]);
+
+  const isDirty =
+    editMode &&
+    JSON.stringify({ ...pendingSettings, lockedFields: undefined }) !==
+      JSON.stringify({ ...settings, lockedFields: undefined });
+
+  // `p` = the settings object currently displayed/editable
+  const p = editMode ? pendingSettings : settings;
+  const updatePending = (partial: Partial<Settings>) =>
+    setPendingSettings((prev) => ({ ...prev, ...partial }));
+
+  const isFieldLocked = (field: keyof Settings) =>
+    settings.lockedFields?.includes(field) ?? false;
+
+  const isGuest = !!(settings.lockedFields?.length);
+
+  // ── Specific date (local only — never stored in Settings) ──
+  const [specificDate, setSpecificDate] = useState(todayString);
+
+  // ── Preset state ──
   const [presets, setPresets] = useState(() => listPresets());
   const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<{ slot: PresetSlot; name: string } | null>(null);
-  const [selectedRoom, setSelectedRoom] = useState<{ code: string; name: string } | null>(null);
-
-  // Collapsible sections
   const [expandPresets, setExpandPresets] = useState(false);
-  const [expandRooms, setExpandRooms] = useState(false);
-  const [expandJoin, setExpandJoin] = useState(false);
-
-  // Dropdown state
   const [openDropdownPreset, setOpenDropdownPreset] = useState<PresetSlot | null>(null);
-  const [openDropdownRoom, setOpenDropdownRoom] = useState<string | null>(null);
 
-  // Cowork toggle
-  const [hostCowork, setHostCowork] = useState(false);
-  const [showShareLockedTip, setShowShareLockedTip] = useState(false);
-
-  // Scheduling state (unified)
-  const [startType, setStartType] = useState<'now' | 'specific' | 'recurring'>('now');
-  const [specificDate, setSpecificDate] = useState(() => {
-    const t = new Date();
-    const yyyy = t.getFullYear();
-    const mm = String(t.getMonth() + 1).padStart(2, '0');
-    const dd = String(t.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  });
-  const [specificTime, setSpecificTime] = useState('');
-  const [recurringDays, setRecurringDays] = useState<CoworkDay[]>([]);
-  const [recurringTime, setRecurringTime] = useState('');
-  const [recurringTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const [scheduleSaved, setScheduleSaved] = useState(false);
-
-  // Hosted rooms
+  // ── Sessions state (hosted rooms + soloSchedule) ──
   const [hostedRooms, setHostedRooms] = useState<CoworkRoom[]>([]);
+  const [hostedRoomsLoaded, setHostedRoomsLoaded] = useState(false);
+  const [expandSessions, setExpandSessions] = useState(false);
+  const [openDropdownRoom, setOpenDropdownRoom] = useState<string | null>(null);
   const [showRoomCodes, setShowRoomCodes] = useState<Record<string, boolean>>({});
   const [deletingRoom, setDeletingRoom] = useState<string | null>(null);
-  const [hostedRoomsLoaded, setHostedRoomsLoaded] = useState(false);
   const [renamingRoomCode, setRenamingRoomCode] = useState<string | null>(null);
   const [renameRoomValue, setRenameRoomValue] = useState('');
+  const [copiedRoomCode, setCopiedRoomCode] = useState<string | null>(null);
+  const [soloSchedule, setSoloSchedule] = useState<ReturnType<typeof getSoloSchedule> | null>(() => getSoloSchedule() ?? null);
+  const [cancelScheduleConfirm, setCancelScheduleConfirm] = useState(false);
 
-  // Host room creation form state
+  // ── Cowork / host creation ──
   const [hostRoomName, setHostRoomName] = useState('');
-  const [hostSharePrompts, setHostSharePrompts] = useState(true);
   const [hostGenerating, setHostGenerating] = useState(false);
   const [hostError, setHostError] = useState('');
-  const [generatedRoom, setGeneratedRoom] = useState<CoworkRoom | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
 
-  // Join panel state
+  // ── Join panel ──
+  const [expandJoin, setExpandJoin] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinRoom, setJoinRoom] = useState<CoworkRoom | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
@@ -198,23 +294,39 @@ export default function Main({
   const [joinMode, setJoinMode] = useState<GuestContentMode>('host-prompts');
   const [joinIsHost, setJoinIsHost] = useState(false);
 
-  // Load hosted rooms
+  // ── Preset saving (shown in edit mode) ──
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const [saveSlot, setSaveSlot] = useState<PresetSlot>('S1');
+  const [saveName, setSaveName] = useState('');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // ── Validation ──
+  const [intervalError, setIntervalError] = useState('');
+  const [scheduleSaved, setScheduleSaved] = useState(false);
+
+  // ── Computed defaults for edit form ──
+  const modeDefaults: Settings = { ...getDefaults(), ...getStoredDefaults() };
+  const derivedBreak = defaultBreakMinutes(p.workMinutes);
+  const derivedLongBreak = defaultLongBreakMinutes(p.breakMinutes);
+  const derivedInterval = defaultPromptInterval(p.workMinutes);
+
+  // ── Effects ──
+
   useEffect(() => {
-    getHostRooms().then((rooms) => {
-      setHostedRooms(rooms);
-      setHostedRoomsLoaded(true);
-      if (!hostRoomName) {
-        const baseName = generateRoomName(settings);
-        const dupes = rooms.filter((r) => r.name === baseName).length;
-        setHostRoomName(dupes > 0 ? `${baseName} ${dupes + 1}` : baseName);
-      }
-    }).catch(() => {
-      setHostedRoomsLoaded(true);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    getHostRooms()
+      .then((rooms) => {
+        setHostedRooms(rooms);
+        setHostedRoomsLoaded(true);
+        if (!hostRoomName) {
+          const baseName = generateRoomName(settings);
+          const dupes = rooms.filter((r) => r.name === baseName).length;
+          setHostRoomName(dupes > 0 ? `${baseName} ${dupes + 1}` : baseName);
+        }
+      })
+      .catch(() => setHostedRoomsLoaded(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Close dropdowns on outside click
   useEffect(() => {
     if (openDropdownPreset === null && openDropdownRoom === null) return;
     const handler = (e: MouseEvent) => {
@@ -227,16 +339,29 @@ export default function Main({
     return () => document.removeEventListener('mousedown', handler);
   }, [openDropdownPreset, openDropdownRoom]);
 
-  const refreshPresets = () => setPresets(listPresets());
+  // ── Edit mode toggle ──
+
+  const handleToggleEdit = () => {
+    if (editMode && isDirty) {
+      if (!window.confirm('Discard unsaved changes?')) return;
+    }
+    if (editMode) {
+      setPendingSettings(settings);
+      setIntervalError('');
+      setShowSavePreset(false);
+    }
+    setEditMode((v) => !v);
+  };
 
   // ── Preset handlers ──
 
-  const handleLoad = (slot: PresetSlot) => {
-    const preset = presets.find((p) => p.slot === slot);
+  const refreshPresets = () => setPresets(listPresets());
+
+  const handleLoadPreset = (slot: PresetSlot) => {
+    const preset = presets.find((pr) => pr.slot === slot);
     if (preset) {
       onLoadPreset(preset.preset.settings, slot, preset.preset.name);
-      setSelectedPreset({ slot, name: preset.preset.name });
-      setSelectedRoom(null);
+      setEditMode(false);
     }
   };
 
@@ -246,16 +371,86 @@ export default function Main({
     setRenamingSlot(null);
   };
 
-  const handleDelete = (slot: PresetSlot) => {
+  const handleDeletePreset = (slot: PresetSlot) => {
     deletePreset(slot);
     refreshPresets();
     setConfirmDeleteSlot(null);
   };
 
-  // ── Host handlers ──
+  // ── Room handlers ──
 
-  const handleGenerateRoom = async () => {
-    if (hostedRooms.length >= 5) { setHostError('You already have 5 hosted rooms. Delete one to create a new room.'); return; }
+  const handleDeleteRoom = async (code: string) => {
+    try {
+      await deleteFirebaseRoom(code);
+      setHostedRooms((prev) => prev.filter((r) => r.code !== code));
+    } catch (e) { console.error(e); }
+    setDeletingRoom(null);
+  };
+
+  const handleRenameRoom = async (code: string) => {
+    const trimmed = renameRoomValue.trim();
+    if (trimmed) {
+      try {
+        await updateFirebaseRoom(code, { name: trimmed });
+        setHostedRooms((prev) => prev.map((r) => r.code === code ? { ...r, name: trimmed } : r));
+      } catch (e) { console.error(e); }
+    }
+    setRenamingRoomCode(null);
+  };
+
+  // ── Join handlers ──
+
+  const handleLoadSession = async () => {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length !== 6) { setJoinError('Please enter a 6-character code.'); return; }
+    setJoinLoading(true);
+    setJoinError('');
+    setJoinRoom(null);
+    try {
+      const room = await getRoom(code);
+      if (!room) { setJoinError('Session not found. Check the code and try again.'); return; }
+      setJoinRoom(room);
+      const isHost = hostedRooms.some((r) => r.code === code);
+      setJoinIsHost(isHost);
+      setJoinMode(room.sharePrompts ? 'host-prompts' : 'own-prompts');
+      // Load session settings into Main (shows what you're joining)
+      onLoadSession(room);
+    } catch {
+      setJoinError('Error looking up session. Check your connection and try again.');
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
+  const handleJoinSession = () => {
+    if (!joinRoom) return;
+    const timing = computeRoomTiming(joinRoom);
+    if (!timing) { setJoinError('Could not determine session timing.'); return; }
+    if (joinIsHost) {
+      onJoinAsHost(joinRoom, timing.startMs);
+    } else {
+      onCoworkGuestStart(joinRoom, joinMode, timing.startMs);
+    }
+  };
+
+  // ── Schedule handler ──
+
+  const handleSaveRecurring = () => {
+    const tz = settings.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!settings.startDays?.length || !settings.startTime) return;
+    saveSoloSchedule({ type: 'recurring', days: settings.startDays, time: settings.startTime, timezone: tz });
+    setSoloSchedule(getSoloSchedule() ?? null);
+    setScheduleSaved(true);
+    setTimeout(() => setScheduleSaved(false), 3000);
+  };
+
+  // ── Host new session ──
+
+  const handleCreateAndHost = async () => {
+    if (hostedRooms.length >= 5) {
+      setHostError('You already have 5 sessions. Delete one first.');
+      return;
+    }
     setHostGenerating(true);
     setHostError('');
     try {
@@ -269,55 +464,51 @@ export default function Main({
         hardBreak: settings.hardBreak ?? false,
         playSound: settings.playSound,
       };
-
-      let roomInput: Parameters<typeof createRoom>[0];
-      if (startType === 'recurring' && recurringDays.length > 0 && recurringTime) {
-        const durationMinutes = computeSessionDurationMs(timingSettings) / 60000;
-        roomInput = {
-          type: 'public',
-          name: hostRoomName.trim() || generateRoomName(settings),
-          mindfulnessOnly: !settings.useTimedWork,
-          timingSettings,
-          sharePrompts: settings.useMindfulness ? hostSharePrompts : false,
-          promptSettings: (settings.useMindfulness && hostSharePrompts) ? {
+      const shareP = settings.useMindfulness ? settings.sharePrompts : false;
+      const promptSettings = shareP
+        ? {
             promptText: settings.promptText,
             promptIntervalMinutes: settings.promptIntervalMinutes,
             dismissSeconds: settings.dismissSeconds,
             promptCount: settings.promptCount,
-            bothMindfulnessScope: settings.bothMindfulnessScope ?? 'work-only',
-          } : undefined,
+            bothMindfulnessScope: settings.bothMindfulnessScope ?? 'work-only' as const,
+          }
+        : undefined;
+
+      let startMs: number | null = null;
+      let input: NewRoomInput;
+
+      if (settings.startType === 'recurring' && settings.startDays?.length && settings.startTime) {
+        const tz = settings.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const durationMinutes = computeSessionDurationMs(timingSettings) / 60000;
+        input = {
+          type: 'public',
+          name: hostRoomName.trim() || generateRoomName(settings),
+          mindfulnessOnly: !settings.useTimedWork,
+          timingSettings,
+          sharePrompts: shareP,
+          promptSettings,
           hostSettings: settings,
-          recurrenceRule: { days: recurringDays, time: recurringTime, timezone: recurringTimezone, durationMinutes },
+          recurrenceRule: { days: settings.startDays, time: settings.startTime, timezone: tz, durationMinutes },
         };
       } else {
-        const startMs =
-          startType === 'specific' && specificDate && specificTime
-            ? new Date(`${specificDate}T${specificTime}`).getTime()
-            : Date.now();
-        roomInput = {
+        if (settings.startType === 'specific' && specificDate && settings.startTime) {
+          const ms = new Date(`${specificDate}T${settings.startTime}`).getTime();
+          if (!isNaN(ms)) startMs = ms;
+        }
+        input = {
           type: 'public',
           name: hostRoomName.trim() || generateRoomName(settings),
           mindfulnessOnly: !settings.useTimedWork,
           timingSettings,
-          sharePrompts: settings.useMindfulness ? hostSharePrompts : false,
-          promptSettings: (settings.useMindfulness && hostSharePrompts) ? {
-            promptText: settings.promptText,
-            promptIntervalMinutes: settings.promptIntervalMinutes,
-            dismissSeconds: settings.dismissSeconds,
-            promptCount: settings.promptCount,
-            bothMindfulnessScope: settings.bothMindfulnessScope ?? 'work-only',
-          } : undefined,
+          sharePrompts: shareP,
+          promptSettings,
           hostSettings: settings,
-          startTime: isNaN(startMs) ? Date.now() : startMs,
+          startTime: startMs ?? Date.now(),
         };
       }
 
-      const code = await createRoom(roomInput);
-      const room = await getRoom(code);
-      if (room) {
-        setGeneratedRoom(room);
-        setHostedRooms((prev) => [...prev, room]);
-      }
+      await onHostStart(input, startMs);
     } catch (e) {
       setHostError(String(e));
     } finally {
@@ -325,100 +516,103 @@ export default function Main({
     }
   };
 
-  const handleHostJoinSession = () => {
-    if (!generatedRoom) return;
-    const timing = computeRoomTiming(generatedRoom);
-    onCoworkHostStart(generatedRoom, timing?.startMs ?? Date.now());
-  };
+  // ── Main action button ──
 
-  const handleDeleteRoom = async (code: string) => {
-    try {
-      await deleteFirebaseRoom(code);
-      setHostedRooms((prev) => prev.filter((r) => r.code !== code));
-    } catch (e) {
-      console.error(e);
-    }
-    setDeletingRoom(null);
-  };
-
-  const handleRenameRoom = async (code: string) => {
-    const trimmed = renameRoomValue.trim();
-    if (trimmed) {
-      try {
-        await updateFirebaseRoom(code, { name: trimmed });
-        setHostedRooms((prev) => prev.map((r) => r.code === code ? { ...r, name: trimmed } : r));
-        if (selectedRoom?.code === code) setSelectedRoom({ code, name: trimmed });
-      } catch (e) {
-        console.error(e);
+  const handleMainAction = async () => {
+    setIntervalError('');
+    if (settings.useMindfulness && settings.useTimedWork) {
+      if (!dividesEvenly(settings.workMinutes, settings.promptIntervalMinutes)) {
+        setIntervalError(
+          `Prosochai interval (${settings.promptIntervalMinutes} min) doesn't fit into work period (${settings.workMinutes} min). Try: ${formatDivisorList(settings.workMinutes)}`
+        );
+        return;
       }
     }
-    setRenamingRoomCode(null);
-  };
 
-  // ── Schedule handlers ──
-
-  const handleSaveRecurring = () => {
-    if (recurringDays.length === 0 || !recurringTime) return;
-    saveSoloSchedule({ type: 'recurring', days: recurringDays, time: recurringTime, timezone: recurringTimezone });
-    setScheduleSaved(true);
-    setTimeout(() => setScheduleSaved(false), 3000);
-  };
-
-  // ── Join handlers ──
-
-  const handleJoinLookup = async () => {
-    const code = joinCode.trim().toUpperCase();
-    if (code.length !== 6) { setJoinError('Please enter a 6-character room code.'); return; }
-    setJoinLoading(true);
-    setJoinError('');
-    setJoinRoom(null);
-    try {
-      const room = await getRoom(code);
-      if (!room) { setJoinError('Room not found. Check the code and try again.'); return; }
-      setJoinRoom(room);
-      const isHost = hostedRooms.some((r) => r.code === code);
-      setJoinIsHost(isHost);
-      setJoinMode(room.sharePrompts ? 'host-prompts' : 'own-prompts');
-    } catch {
-      setJoinError('Error looking up room. Check your connection and try again.');
-    } finally {
-      setJoinLoading(false);
+    if (settings.isCoworking && !loadedRoomCode) {
+      await handleCreateAndHost();
+    } else if (settings.startType === 'now') {
+      onStart();
+    } else if (settings.startType === 'specific') {
+      const ms = new Date(`${specificDate}T${settings.startTime ?? ''}`).getTime();
+      if (isNaN(ms)) { setIntervalError('Please set a valid date and time.'); return; }
+      onScheduledStart(ms);
+    } else {
+      // recurring
+      handleSaveRecurring();
     }
   };
 
-  const handleJoinSession = () => {
-    if (!joinRoom) return;
-    const timing = computeRoomTiming(joinRoom);
-    if (!timing) { setJoinError('Could not determine session timing.'); return; }
-    onCoworkGuestStart(joinRoom, joinMode, timing.startMs);
+  const actionLabel = (() => {
+    if (settings.isCoworking && !loadedRoomCode) {
+      if (settings.startType === 'now') return 'Host Session Now';
+      return 'Schedule Cowork Session';
+    }
+    if (settings.startType === 'now') return 'Start Session Now';
+    if (settings.startType === 'specific') return 'Schedule Session';
+    return 'Save Schedule';
+  })();
+
+  // ── Save option handlers ──
+
+  const handleSaveAsDefault = () => {
+    onSaveAsDefault(pendingSettings);
+    setEditMode(false);
+    setShowSavePreset(false);
   };
 
-  // ── Render ──
+  const handleSavePresetAction = () => {
+    const name = saveName.trim();
+    if (!name) return;
+    onSavePreset(saveSlot, name, pendingSettings);
+    refreshPresets();
+    setEditMode(false);
+    setShowSavePreset(false);
+    setSaveName('');
+  };
 
-  const sortedRooms = [...hostedRooms].sort((a, b) => {
-    const ka = getRoomSortKey(a);
-    const kb = getRoomSortKey(b);
-    if (ka.group !== kb.group) return ka.group - kb.group;
-    return ka.sortMs - kb.sortMs;
-  });
+  const handleSaveToRoom = async () => {
+    await onSaveToRoom(pendingSettings);
+    setEditMode(false);
+  };
 
-  // Heading hint for WhenSection when a room is selected
-  const selectedRoomObj = selectedRoom ? hostedRooms.find((r) => r.code === selectedRoom.code) : null;
-  const selectedRoomTiming = selectedRoomObj ? computeRoomTiming(selectedRoomObj) : null;
-  const selectedRoomEnded = selectedRoomObj
-    ? (!selectedRoomTiming?.isActive && !selectedRoomTiming?.isFuture && !selectedRoomTiming?.nextStartMs)
-    : false;
-  const whenHeadingHint =
-    !hostCowork && selectedRoom
-      ? selectedRoomEnded
-        ? `To edit "${selectedRoom.name}", use Options ▾ in its card above.`
-        : `To join "${selectedRoom.name}" instead, click its Join button above. To edit it, use Options ▾.`
-      : undefined;
+  const handleApply = () => {
+    onSettingsChange(pendingSettings);
+    setEditMode(false);
+    setShowSavePreset(false);
+  };
+
+  // ── Rooms sorted / filtered ──
+
+  const sortedRooms = [...hostedRooms]
+    .filter((room) => {
+      const t = computeRoomTiming(room);
+      return t?.isActive || t?.isFuture || !!t?.nextStartMs;
+    })
+    .sort((a, b) => {
+      const ka = getRoomSortKey(a);
+      const kb = getRoomSortKey(b);
+      if (ka.group !== kb.group) return ka.group - kb.group;
+      return ka.sortMs - kb.sortMs;
+    });
+
+  const hasActiveSessions = sortedRooms.length > 0 || !!soloSchedule;
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      {/* Hero header */}
-      <div className="text-center space-y-1.5">
+
+      {/* ── Hero header ── */}
+      <div className="text-center space-y-1.5 relative">
+        <div className="absolute right-0 top-0">
+          <button
+            onClick={handleToggleEdit}
+            className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white"
+          >
+            {editMode ? '✕ Done' : '✎ Edit settings'}
+          </button>
+        </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo.png" alt="Prosochai" className="mx-auto h-16 w-auto" />
         <h1 className="text-3xl font-bold text-gray-900">Prosochai</h1>
@@ -441,122 +635,386 @@ export default function Main({
           />
           , alone or with others
         </p>
-        {selectedPreset && !selectedRoom && (
-          <p className="text-sm text-indigo-600">
-            Preset selected: {selectedPreset.slot} — {selectedPreset.name}
+        {isGuest && (
+          <p className="text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1 inline-block">
+            Guest mode — Pomodoro &amp; timing set by host
           </p>
         )}
-        {selectedRoom && (
-          <p className="text-sm text-emerald-600">
-            Room loaded: {selectedRoom.name}
+        {loadedRoomCode && !isGuest && (
+          <p className="text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg px-3 py-1 inline-block">
+            Session loaded: {loadedRoomCode}
           </p>
         )}
       </div>
 
-      {/* Settings display */}
-      <SettingsDisplay settings={settings} onChange={onSettingsChange} />
+      {/* ── Settings display (locked) or edit form ── */}
+      {!editMode ? (
+        <SettingsDisplay settings={settings} onChange={onSettingsChange} />
+      ) : (
+        <div className="space-y-5">
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-700">
+            Edit mode — click <strong>Save options</strong> below when done, or <strong>✕ Done</strong> to discard.
+          </div>
 
-      {/* ── Saved Presets (collapsible) ── */}
-      {presets.length > 0 && (
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-          <button
-            type="button"
-            onClick={() => setExpandPresets((v) => !v)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
-          >
-            <span>{expandPresets ? '−' : '+'} Saved presets ({presets.length})</span>
-          </button>
-          {expandPresets && (
-            <div className="mt-3 space-y-2">
-              {presets.map(({ slot, preset }) => (
-                <div key={slot} className={`rounded-lg border px-3 py-2 space-y-2 transition-colors ${selectedPreset?.slot === slot ? 'border-indigo-400 bg-indigo-50' : 'border-indigo-200 bg-white'}`}>
-                  {renamingSlot === slot ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(slot); if (e.key === 'Escape') setRenamingSlot(null); }}
-                        autoFocus
-                        className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                      />
-                      <button onClick={() => handleSaveRename(slot)} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Save</button>
-                      <button onClick={() => setRenamingSlot(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => { handleLoad(slot); onStart(); }}
-                        className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
-                      >
-                        Start
-                      </button>
-                      <span
-                        className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
-                        onClick={() => handleLoad(slot)}
-                      >
-                        {slot} — {preset.name}
-                      </span>
-                      <div className="relative" data-dropdown>
-                        <button
-                          onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
-                          className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
-                        >
-                          Options ▾
-                        </button>
-                        {openDropdownPreset === slot && (
-                          <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
-                            <button
-                              onClick={() => { setOpenDropdownPreset(null); handleLoad(slot); onCustomize(); }}
-                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              Change Settings
-                            </button>
-                            <button
-                              onClick={() => { setOpenDropdownPreset(null); setRenamingSlot(slot); setRenameValue(preset.name); setConfirmDeleteSlot(null); }}
-                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              Rename
-                            </button>
-                            <button
-                              onClick={() => { setOpenDropdownPreset(null); setConfirmDeleteSlot(slot); setRenamingSlot(null); }}
-                              className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {confirmDeleteSlot === slot && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
-                      <p className="text-xs text-red-800">Delete this preset permanently? This cannot be undone.</p>
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => setConfirmDeleteSlot(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button onClick={() => handleDelete(slot)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm delete</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+          {/* ── Pomodoro edit section ── */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Pomodoros</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!p.useTimedWork && !p.useMindfulness) return;
+                  if (isFieldLocked('useTimedWork')) return;
+                  updatePending({
+                    useTimedWork: !p.useTimedWork,
+                    ...(!p.useTimedWork && p.useMindfulness ? { promptIntervalMinutes: derivedInterval } : {}),
+                  });
+                }}
+                disabled={isFieldLocked('useTimedWork') || (!p.useMindfulness && p.useTimedWork)}
+                title={!p.useMindfulness ? 'Prosochai must be on if Pomodoros are off' : undefined}
+                className={`flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 transition-colors ${
+                  p.useTimedWork ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                } ${(isFieldLocked('useTimedWork') || (!p.useMindfulness && p.useTimedWork)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span className={`inline-block w-2 h-2 rounded-full ${p.useTimedWork ? 'bg-indigo-500' : 'bg-gray-400'}`} />
+                {p.useTimedWork ? 'On' : 'Off'}
+              </button>
             </div>
-          )}
+            {p.useTimedWork ? (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
+                <SettingField label="Work period" helper={`Default: ${formatNum(modeDefaults.workMinutes)} minutes`}>
+                  <NumericInput
+                    value={p.workMinutes}
+                    defaultValue={modeDefaults.workMinutes}
+                    unit="minutes"
+                    disabled={isFieldLocked('workMinutes')}
+                    onChange={(v) => updatePending({
+                      workMinutes: v,
+                      breakMinutes: defaultBreakMinutes(v),
+                      longBreakMinutes: defaultLongBreakMinutes(defaultBreakMinutes(v)),
+                      ...(p.useMindfulness ? { promptIntervalMinutes: defaultPromptInterval(v) } : {}),
+                    })}
+                  />
+                </SettingField>
+                <SettingField label="Break" helper={`Default: ${formatNum(derivedBreak)} minutes`}>
+                  <NumericInput
+                    value={p.breakMinutes}
+                    defaultValue={derivedBreak}
+                    unit="minutes"
+                    disabled={isFieldLocked('breakMinutes')}
+                    onChange={(v) => updatePending({ breakMinutes: v, longBreakMinutes: defaultLongBreakMinutes(v) })}
+                  />
+                </SettingField>
+                <SettingField label="Work periods per set" helper={`Default: ${modeDefaults.sessionsPerSet}. Enter 0 for unlimited.`}>
+                  <NumericInput
+                    value={p.sessionsPerSet}
+                    defaultValue={modeDefaults.sessionsPerSet}
+                    unit="periods"
+                    integerOnly
+                    allowZero
+                    disabled={isFieldLocked('sessionsPerSet')}
+                    onChange={(v) => updatePending({ sessionsPerSet: v, ...(v === 0 ? { multipleSets: false } : {}) })}
+                  />
+                </SettingField>
+                {p.sessionsPerSet !== 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Multiple sets with long break?</span>
+                    <Toggle
+                      checked={p.multipleSets}
+                      disabled={isFieldLocked('multipleSets')}
+                      onChange={() => updatePending({ multipleSets: !p.multipleSets, numberOfSets: !p.multipleSets ? Math.max(p.numberOfSets, 3) : 1 })}
+                    />
+                  </div>
+                )}
+                {p.multipleSets && p.sessionsPerSet !== 0 && (
+                  <>
+                    <SettingField label="Long break between sets" helper={`Default: ${formatNum(derivedLongBreak)} minutes`}>
+                      <NumericInput
+                        value={p.longBreakMinutes}
+                        defaultValue={derivedLongBreak}
+                        unit="minutes"
+                        disabled={isFieldLocked('longBreakMinutes')}
+                        onChange={(v) => updatePending({ longBreakMinutes: v })}
+                      />
+                    </SettingField>
+                    <SettingField label="Number of sets" helper="Default: 3. Enter 0 for unlimited.">
+                      <NumericInput
+                        value={p.numberOfSets}
+                        defaultValue={3}
+                        unit="sets"
+                        integerOnly
+                        allowZero
+                        disabled={isFieldLocked('numberOfSets')}
+                        onChange={(v) => updatePending({ numberOfSets: v })}
+                      />
+                    </SettingField>
+                  </>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Lock screen during breaks?</span>
+                  <Toggle
+                    checked={p.hardBreak ?? false}
+                    disabled={isFieldLocked('hardBreak')}
+                    onChange={() => updatePending({ hardBreak: !p.hardBreak })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-3 text-sm text-gray-400 italic">
+                Pomodoros disabled — click On/Off above to enable
+              </div>
+            )}
+          </div>
+
+          {/* ── Prosochai edit section ── */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Prosochai</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!p.useMindfulness && !p.useTimedWork) return;
+                  updatePending({ useMindfulness: !p.useMindfulness });
+                }}
+                disabled={!p.useTimedWork && p.useMindfulness}
+                title={!p.useTimedWork ? 'Pomodoros must be on if Prosochai is off' : undefined}
+                className={`flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 transition-colors ${
+                  p.useMindfulness ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                } ${(!p.useTimedWork && p.useMindfulness) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span className={`inline-block w-2 h-2 rounded-full ${p.useMindfulness ? 'bg-indigo-500' : 'bg-gray-400'}`} />
+                {p.useMindfulness ? 'On' : 'Off'}
+              </button>
+            </div>
+            {p.useMindfulness ? (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
+                <SettingField label="Prosochai text" helper={`Default: "${modeDefaults.promptText}"`}>
+                  <textarea
+                    value={p.promptText}
+                    onChange={(e) => updatePending({ promptText: e.target.value || modeDefaults.promptText })}
+                    placeholder={modeDefaults.promptText}
+                    rows={3}
+                    className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
+                  />
+                </SettingField>
+                <SettingField
+                  label="Prompt frequency"
+                  helper={p.useTimedWork
+                    ? `Must fit evenly into your ${formatNum(p.workMinutes)}-minute work period. Default: ${formatNum(derivedInterval)} minutes.`
+                    : `Must divide evenly into 60 minutes.`}
+                >
+                  <NumericInput
+                    value={p.promptIntervalMinutes}
+                    defaultValue={p.useTimedWork ? derivedInterval : modeDefaults.promptIntervalMinutes}
+                    unit="minutes"
+                    onChange={(v) => updatePending({ promptIntervalMinutes: v })}
+                  />
+                </SettingField>
+                <SettingField label="Dismiss delay" helper={`How long the popup stays before you can dismiss it.`}>
+                  <NumericInput
+                    value={p.dismissSeconds}
+                    defaultValue={modeDefaults.dismissSeconds}
+                    unit="seconds"
+                    integerOnly
+                    min={0}
+                    allowZero
+                    onChange={(v) => updatePending({ dismissSeconds: v })}
+                  />
+                </SettingField>
+                {!p.useTimedWork && (
+                  <SettingField label="Number of prompts" helper="Enter 0 to run indefinitely.">
+                    <NumericInput
+                      value={p.promptCount}
+                      defaultValue={modeDefaults.promptCount}
+                      unit="prompts"
+                      integerOnly
+                      allowZero
+                      onChange={(v) => updatePending({ promptCount: v })}
+                    />
+                  </SettingField>
+                )}
+                {p.useTimedWork && (
+                  <SettingField label="Which popups show Prosochai?">
+                    <div className="space-y-2">
+                      {SCOPE_OPTIONS.map((opt) => (
+                        <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="bothScope"
+                            value={opt.value}
+                            checked={(p.bothMindfulnessScope ?? 'work-only') === opt.value}
+                            onChange={() => updatePending({ bothMindfulnessScope: opt.value })}
+                            className="text-indigo-600"
+                          />
+                          <span className="text-sm text-gray-700">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </SettingField>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-3 text-sm text-gray-400 italic">
+                Prosochai disabled — click On/Off above to enable
+              </div>
+            )}
+          </div>
+
+          {/* ── Sound toggle in edit mode ── */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">{p.playSound ? '🔊' : '🔇'} Sound</span>
+            <Toggle checked={p.playSound} onChange={() => updatePending({ playSound: !p.playSound })} />
+          </div>
         </div>
       )}
 
-      {/* ── Your Coworking Rooms (collapsible) ── */}
-      {hostedRoomsLoaded && hostedRooms.length > 0 && (
+      {/* ── Timing section ── */}
+      {!editMode ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">When</h3>
+          <p className="text-sm text-gray-600">
+            {settings.startType === 'now' && 'Start session immediately'}
+            {settings.startType === 'specific' && settings.startTime
+              ? `Scheduled at ${settings.startTime}`
+              : settings.startType === 'specific' ? 'Scheduled (no time set)' : null}
+            {settings.startType === 'recurring' && settings.startDays?.length && settings.startTime
+              ? `Recurring: ${settings.startDays.join(', ')} at ${settings.startTime}`
+              : settings.startType === 'recurring' ? 'Recurring (configure in edit mode)' : null}
+          </p>
+        </div>
+      ) : (
+        <WhenSection
+          startType={isFieldLocked('startType') ? settings.startType : p.startType}
+          onStartTypeChange={(t) => { if (!isFieldLocked('startType')) updatePending({ startType: t }); }}
+          specificDate={specificDate}
+          specificTime={isFieldLocked('startTime') ? (settings.startTime ?? '') : (p.startTime ?? '')}
+          onSpecificDateChange={setSpecificDate}
+          onSpecificTimeChange={(v) => { if (!isFieldLocked('startTime')) updatePending({ startTime: v }); }}
+          recurringDays={isFieldLocked('startDays') ? (settings.startDays ?? []) : (p.startDays ?? [])}
+          recurringTime={isFieldLocked('startTime') ? (settings.startTime ?? '') : (p.startTime ?? '')}
+          onRecurringDaysChange={(days) => { if (!isFieldLocked('startDays')) updatePending({ startDays: days }); }}
+          onRecurringTimeChange={(v) => { if (!isFieldLocked('startTime')) updatePending({ startTime: v }); }}
+          hostCowork={p.isCoworking}
+          onStartNow={() => {}}
+          onSchedule={() => {}}
+          onSaveRecurring={() => {}}
+          showActions={false}
+          heading={isFieldLocked('startType') ? 'When (set by host)' : 'When should this session start?'}
+        />
+      )}
+
+      {/* ── Coworking section ── */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-3">
+        <div className="flex items-center gap-3">
+          <Toggle
+            checked={editMode ? p.isCoworking : settings.isCoworking}
+            disabled={isFieldLocked('isCoworking')}
+            onChange={() => {
+              if (isFieldLocked('isCoworking')) return;
+              if (editMode) {
+                updatePending({ isCoworking: !p.isCoworking });
+              } else {
+                onSettingsChange({ ...settings, isCoworking: !settings.isCoworking });
+              }
+            }}
+          />
+          <span className="text-sm font-medium text-gray-700">
+            Host a{' '}
+            <span className="underline decoration-dotted cursor-help">
+              Coworking Session
+              <Tooltip text="Start a shared session that others can join using a room code. Everyone syncs to your timer — and optionally your Prosochai." />
+            </span>
+          </span>
+          {isFieldLocked('isCoworking') && (
+            <span className="text-xs text-gray-400 italic">(set by host)</span>
+          )}
+        </div>
+
+        {(editMode ? p.isCoworking : settings.isCoworking) && !isFieldLocked('isCoworking') && (
+          <div className="space-y-3 pt-1">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Session name</label>
+              <input
+                type="text"
+                value={hostRoomName}
+                onChange={(e) => setHostRoomName(e.target.value)}
+                placeholder={generateRoomName(settings)}
+                className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            {settings.useMindfulness && (
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editMode ? p.sharePrompts : settings.sharePrompts}
+                  onChange={() => {
+                    if (editMode) updatePending({ sharePrompts: !p.sharePrompts });
+                    else onSettingsChange({ ...settings, sharePrompts: !settings.sharePrompts });
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-700">Share my Prosochai with guests</span>
+              </label>
+            )}
+          </div>
+        )}
+
+        {isGuest && (
+          <p className="text-xs text-gray-500 italic">You&apos;re joining as a guest — Pomodoro &amp; timing settings are set by the host.</p>
+        )}
+      </div>
+
+      {/* ── Scheduled & Active Sessions ── */}
+      {hostedRoomsLoaded && hasActiveSessions && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <button
             type="button"
-            onClick={() => setExpandRooms((v) => !v)}
+            onClick={() => setExpandSessions((v) => !v)}
             className="w-full flex items-center justify-between text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
           >
-            <span>{expandRooms ? '−' : '+'} Your coworking rooms ({hostedRooms.length})</span>
+            <span>{expandSessions ? '−' : '+'} Scheduled &amp; active sessions ({sortedRooms.length + (soloSchedule ? 1 : 0)})</span>
           </button>
-          {expandRooms && (
+          {expandSessions && (
             <div className="mt-3 space-y-2">
+              {/* Solo schedule card */}
+              {soloSchedule && (
+                <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-indigo-100 text-indigo-700 flex-shrink-0">Solo</span>
+                    <span className="flex-1 text-sm font-semibold text-gray-700">
+                      {soloSchedule.type === 'specific'
+                        ? `${soloSchedule.date} at ${soloSchedule.time}`
+                        : `${soloSchedule.days.join(', ')} at ${soloSchedule.time}`}
+                      {soloSchedule.type === 'recurring' && (
+                        <span title="Recurring" className="ml-1 text-xs text-gray-400">↻</span>
+                      )}
+                    </span>
+                  </div>
+                  {cancelScheduleConfirm ? (
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <span className="text-xs text-red-700">Delete this schedule?</span>
+                      <button
+                        onClick={() => { onClearSoloSchedule(); setSoloSchedule(null); setCancelScheduleConfirm(false); }}
+                        className="text-xs font-medium text-red-600 hover:text-red-800"
+                      >
+                        Yes, delete
+                      </button>
+                      <button onClick={() => setCancelScheduleConfirm(false)} className="text-xs text-gray-400 hover:text-gray-600">
+                        Never mind
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setCancelScheduleConfirm(true)}
+                      className="text-xs text-gray-400 hover:text-red-600 underline"
+                    >
+                      Cancel schedule
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Hosted room cards */}
               {sortedRooms.map((room) => {
                 const timing = computeRoomTiming(room);
                 const badge = formatRoomBadge(room);
@@ -566,11 +1024,11 @@ export default function Main({
                 const futureStartMs = timing?.nextStartMs ?? timing?.startMs ?? 0;
                 const isSoon = !isActive && (timing?.isFuture || !!timing?.nextStartMs) && (futureStartMs - now <= FIVE_MIN_MS);
                 const joinable = isActive || isSoon;
-                const isEnded = !isActive && !timing?.isFuture && !timing?.nextStartMs;
                 const joinStartMs = isActive ? (timing?.startMs ?? Date.now()) : futureStartMs;
-                const joinTooltip = !joinable ? (isEnded ? 'This session has ended' : 'You can join 5 minutes before it starts') : undefined;
+                const joinTooltip = !joinable ? 'You can join 5 minutes before it starts' : undefined;
+
                 return (
-                  <div key={room.code} className={`rounded-lg border px-3 py-2 space-y-2 transition-colors ${selectedRoom?.code === room.code ? 'border-emerald-400 bg-emerald-50' : 'border-emerald-200 bg-white'}`}>
+                  <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
                     {renamingRoomCode === room.code ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -590,53 +1048,47 @@ export default function Main({
                           <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
                           <span
                             className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
-                            onClick={() => { onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); }}
+                            onClick={() => { onLoadSession(room); setExpandSessions(true); }}
                           >
                             {room.name ?? room.code}
                             {room.recurrenceRule && (
-                              <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
+                              <span title="Recurring" className="ml-1 text-xs text-gray-400">↻</span>
                             )}
                           </span>
                           <div className="relative" data-dropdown>
-                          <button
-                            onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
-                            className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
-                          >
-                            Options ▾
-                          </button>
-                          {openDropdownRoom === room.code && (
-                            <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
-                              <button
-                                onClick={() => { setOpenDropdownRoom(null); onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); onCustomize(); }}
-                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                              >
-                                Change Settings
-                              </button>
-                              <button
-                                onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
-                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                              >
-                                Rename
-                              </button>
-                              <button
-                                onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
-                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                              >
-                                {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
-                              </button>
-                              <button
-                                onClick={() => { setOpenDropdownRoom(null); setDeletingRoom(room.code); }}
-                                className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                            <button
+                              onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
+                              className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
+                            >
+                              Options ▾
+                            </button>
+                            {openDropdownRoom === room.code && (
+                              <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                                <button
+                                  onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
+                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                >
+                                  Rename
+                                </button>
+                                <button
+                                  onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
+                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                >
+                                  {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
+                                </button>
+                                <button
+                                  onClick={() => { setOpenDropdownRoom(null); setDeletingRoom(room.code); }}
+                                  className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <button
                           disabled={!joinable}
-                          onClick={joinable ? () => onCoworkHostStart(room, joinStartMs) : undefined}
+                          onClick={joinable ? () => onJoinAsHost(room, joinStartMs) : undefined}
                           title={joinTooltip}
                           className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -646,10 +1098,10 @@ export default function Main({
                     )}
                     {deletingRoom === room.code && (
                       <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
-                        <p className="text-xs text-red-800">Delete this room permanently? This cannot be undone.</p>
+                        <p className="text-xs text-red-800">Delete this session permanently?</p>
                         <div className="flex gap-2 shrink-0">
                           <button onClick={() => setDeletingRoom(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
-                          <button onClick={() => handleDeleteRoom(room.code)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm delete</button>
+                          <button onClick={() => handleDeleteRoom(room.code)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm</button>
                         </div>
                       </div>
                     )}
@@ -657,10 +1109,14 @@ export default function Main({
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-lg font-bold tracking-widest text-emerald-700">{room.code}</span>
                         <button
-                          onClick={() => navigator.clipboard.writeText(room.code)}
+                          onClick={() => {
+                            navigator.clipboard.writeText(room.code);
+                            setCopiedRoomCode(room.code);
+                            setTimeout(() => setCopiedRoomCode(null), 2000);
+                          }}
                           className="text-xs text-gray-400 hover:text-emerald-600"
                         >
-                          Copy
+                          {copiedRoomCode === room.code ? 'Copied!' : 'Copy'}
                         </button>
                       </div>
                     )}
@@ -672,45 +1128,186 @@ export default function Main({
         </div>
       )}
 
-      {/* ── Cowork toggle ── */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={hostCowork}
-          onClick={() => { setHostCowork((v) => !v); if (hostCowork) setGeneratedRoom(null); }}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${hostCowork ? 'bg-indigo-600' : 'bg-gray-200'}`}
-        >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${hostCowork ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
-        <span className="text-sm font-medium text-gray-700">
-          {selectedRoom ? 'Make this a NEW ' : 'Make this a '}
-          <span className="underline decoration-dotted cursor-help">
-            Hosted Coworking Session
-            <Tooltip text="Start a shared session that others can join using a room code. Everyone syncs to your timer — and optionally your Prosochai." />
-          </span>
-        </span>
-      </div>
+      {/* ── Saved Presets ── */}
+      {presets.length > 0 && (
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+          <button
+            type="button"
+            onClick={() => setExpandPresets((v) => !v)}
+            className="w-full flex items-center justify-between text-sm font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
+          >
+            <span>{expandPresets ? '−' : '+'} Saved presets ({presets.length})</span>
+          </button>
+          {expandPresets && (
+            <div className="mt-3 space-y-2">
+              {presets.map(({ slot, preset }) => (
+                <div key={slot} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 space-y-2">
+                  {renamingSlot === slot ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(slot); if (e.key === 'Escape') setRenamingSlot(null); }}
+                        autoFocus
+                        className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+                      />
+                      <button onClick={() => handleSaveRename(slot)} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Save</button>
+                      <button onClick={() => setRenamingSlot(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { handleLoadPreset(slot); onStart(); }}
+                        className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
+                      >
+                        Start
+                      </button>
+                      <span
+                        className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        onClick={() => handleLoadPreset(slot)}
+                      >
+                        {slot} — {preset.name}
+                      </span>
+                      <div className="relative" data-dropdown>
+                        <button
+                          onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
+                          className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
+                        >
+                          Options ▾
+                        </button>
+                        {openDropdownPreset === slot && (
+                          <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                            <button
+                              onClick={() => { setOpenDropdownPreset(null); setRenamingSlot(slot); setRenameValue(preset.name); setConfirmDeleteSlot(null); }}
+                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              onClick={() => { setOpenDropdownPreset(null); setConfirmDeleteSlot(slot); setRenamingSlot(null); }}
+                              className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {confirmDeleteSlot === slot && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                      <p className="text-xs text-red-800">Delete this preset? Cannot be undone.</p>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => setConfirmDeleteSlot(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button onClick={() => handleDeletePreset(slot)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Delete</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* ── When Should This Session Start? ── */}
-      <WhenSection
-        startType={startType}
-        onStartTypeChange={setStartType}
-        specificDate={specificDate}
-        specificTime={specificTime}
-        onSpecificDateChange={setSpecificDate}
-        onSpecificTimeChange={setSpecificTime}
-        recurringDays={recurringDays}
-        recurringTime={recurringTime}
-        onRecurringDaysChange={setRecurringDays}
-        onRecurringTimeChange={setRecurringTime}
-        hostCowork={hostCowork}
-        onStartNow={onStart}
-        onSchedule={onScheduledStart}
-        onSaveRecurring={handleSaveRecurring}
-        heading={hostCowork ? 'Schedule a new coworking room' : 'Start a solo session'}
-        headingHint={whenHeadingHint}
-      />
+      {/* ── Save options (edit mode with changes) ── */}
+      {editMode && isDirty && (
+        <div className="rounded-2xl border border-indigo-300 bg-indigo-50 p-4 space-y-3">
+          <p className="text-sm font-semibold text-indigo-800">Save changes?</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleSaveAsDefault}
+              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+            >
+              Save as default
+            </button>
+            <button
+              onClick={() => setShowSavePreset((v) => !v)}
+              className="rounded-lg border-2 border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:border-indigo-500 transition-colors"
+            >
+              Save as preset…
+            </button>
+            {loadedRoomCode && (
+              <button
+                onClick={handleSaveToRoom}
+                className="rounded-lg border-2 border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:border-emerald-500 transition-colors"
+              >
+                Save to session
+              </button>
+            )}
+            <button
+              onClick={handleApply}
+              className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 hover:border-gray-400 transition-colors"
+            >
+              Apply (don&apos;t save)
+            </button>
+          </div>
+          {showSavePreset && (
+            <div className="flex gap-2 items-center flex-wrap pt-1">
+              <select
+                value={saveSlot}
+                onChange={(e) => setSaveSlot(e.target.value as PresetSlot)}
+                className="rounded-lg border-2 border-indigo-200 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+              >
+                {(['S1', 'S2', 'S3', 'S4', 'S5'] as PresetSlot[]).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSavePresetAction(); }}
+                placeholder="Preset name"
+                className="flex-1 min-w-32 rounded-lg border-2 border-indigo-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+              />
+              <button
+                onClick={handleSavePresetAction}
+                disabled={!saveName.trim()}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Reset to original defaults (in edit mode) ── */}
+      {editMode && (
+        <div className="text-center">
+          {showResetConfirm ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3 text-left">
+              <p className="text-sm text-red-800">Reset ALL defaults to original factory values? This cannot be undone.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowResetConfirm(false); onResetToOriginal(); setEditMode(false); }}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  Confirm reset
+                </button>
+                <button onClick={() => setShowResetConfirm(false)} className="text-sm text-gray-500 hover:text-gray-700">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowResetConfirm(true)} className="text-sm text-gray-400 hover:text-red-500 underline">
+              Reset to original defaults
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Main action button ── */}
+      <Button onClick={handleMainAction} disabled={hostGenerating} className="w-full text-base">
+        {hostGenerating ? 'Creating session…' : actionLabel}
+      </Button>
+
+      {intervalError && (
+        <p className="text-sm text-red-600 text-center">{intervalError}</p>
+      )}
 
       {scheduleSaved && (
         <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 text-center">
@@ -718,121 +1315,20 @@ export default function Main({
         </p>
       )}
 
-      {/* ── Cowork creation form (only when hostCowork ON) ── */}
-      {hostCowork && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
-          {generatedRoom ? (
-            <div className="space-y-4">
-              <p className="text-sm font-semibold text-gray-700">Room created!</p>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-3xl font-bold tracking-widest text-indigo-600">{generatedRoom.code}</span>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(generatedRoom.code);
-                    setCopiedCode(true);
-                    setTimeout(() => setCopiedCode(false), 2000);
-                  }}
-                  className="text-xs text-gray-400 hover:text-indigo-600"
-                >
-                  {copiedCode ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">Share this code with anyone you want to invite.</p>
-              {(() => {
-                const timing = computeRoomTiming(generatedRoom);
-                const startsWithin5Min = timing && (timing.isActive || (timing.isFuture && timing.startMs - Date.now() <= 5 * 60 * 1000));
-                return startsWithin5Min ? (
-                  <Button onClick={handleHostJoinSession} className="w-full">Join Room Now</Button>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-500">Room saved. You can join later from your rooms list.</p>
-                    <Button onClick={handleHostJoinSession} variant="secondary" className="w-full">Join as Host &amp; Start Session</Button>
-                  </div>
-                );
-              })()}
-              <button onClick={() => setGeneratedRoom(null)} className="text-xs text-gray-400 hover:text-gray-600 underline">
-                Create a different room
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Room name</label>
-                <input
-                  type="text"
-                  value={hostRoomName}
-                  onChange={(e) => setHostRoomName(e.target.value)}
-                  placeholder={generateRoomName(settings)}
-                  className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              {settings.useMindfulness && (() => {
-                const locked = !settings.useTimedWork;
-                return (
-                  <div className="relative">
-                    <div
-                      className={`flex items-center gap-3 ${locked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                      onClick={locked ? () => { setShowShareLockedTip(true); setTimeout(() => setShowShareLockedTip(false), 3500); } : undefined}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!hostSharePrompts}
-                        onChange={(e) => setHostSharePrompts(!e.target.checked)}
-                        disabled={locked}
-                        className={`w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 ${locked ? 'opacity-40 pointer-events-none' : ''}`}
-                      />
-                      <span className={`text-sm ${locked ? 'text-gray-400' : 'text-gray-700'}`}>
-                        Do NOT share my Prosochai with guests
-                      </span>
-                    </div>
-                    {locked && showShareLockedTip && (
-                      <p className="mt-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
-                        In a Prosochai-only session, sharing Prosochai is the whole point — guests can&rsquo;t opt out.
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {hostedRooms.length >= 5 ? (
-                <p className="text-sm text-amber-700 bg-amber-50 rounded-lg p-3">
-                  You already have 5 hosted rooms. Delete one to create a new room.
-                </p>
-              ) : (
-                <Button onClick={handleGenerateRoom} disabled={hostGenerating} className="w-full">
-                  {hostGenerating ? 'Creating room…' : 'Generate Room Code'}
-                </Button>
-              )}
-
-              {hostError && <p className="text-sm text-red-600">{hostError}</p>}
-
-              <p className="text-xs text-gray-400">
-                Make sure your settings are correct before generating the code — the room will be created immediately.
-              </p>
-            </div>
-          )}
-        </div>
+      {hostError && (
+        <p className="text-sm text-red-600 text-center">{hostError}</p>
       )}
 
-      {/* Reset to saved defaults */}
-      {!isAtDefaults && (
+      {/* ── Reset to saved defaults (locked mode only) ── */}
+      {!isAtDefaults && !editMode && (
         <div className="text-center">
-          <button
-            onClick={onLoadDefaults}
-            className="text-sm text-gray-400 underline hover:text-indigo-600 transition-colors"
-          >
+          <button onClick={onLoadDefaults} className="text-sm text-gray-400 underline hover:text-indigo-600 transition-colors">
             Reset to my saved defaults
           </button>
         </div>
       )}
 
-      {/* Change Settings */}
-      <Button onClick={onCustomize} variant="secondary" className="w-full">
-        Change Settings
-      </Button>
-
-      {/* ── Join a Coworking Session ▼ ── */}
+      {/* ── Join a Coworking Session ── */}
       <div className="border-t border-gray-100 pt-3">
         <button
           type="button"
@@ -842,7 +1338,7 @@ export default function Main({
           Join a{' '}
           <span className="underline decoration-dotted cursor-help">
             Coworking Session
-            <Tooltip text="Sync to a shared session hosted by someone else. Enter their room code to join their timer in real time." />
+            <Tooltip text="Sync to a shared session hosted by someone else. Enter their session code to join their timer in real time." />
           </span>
           {' '}{expandJoin ? '▲' : '▼'}
         </button>
@@ -854,12 +1350,13 @@ export default function Main({
                 type="text"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleLoadSession(); }}
                 placeholder="ABCXYZ"
                 maxLength={6}
                 className="flex-1 rounded-lg border-2 border-gray-300 px-3 py-2 font-mono text-lg uppercase tracking-widest focus:border-indigo-500 focus:outline-none"
               />
-              <Button onClick={handleJoinLookup} disabled={joinLoading}>
-                {joinLoading ? '…' : 'Look Up'}
+              <Button onClick={handleLoadSession} disabled={joinLoading}>
+                {joinLoading ? '…' : 'Load Session'}
               </Button>
             </div>
             {joinError && <p className="text-sm text-red-600">{joinError}</p>}
@@ -867,21 +1364,24 @@ export default function Main({
             {joinRoom && (
               <div className="space-y-4">
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Room settings</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Session details</p>
                   <dl className="space-y-1.5">
-                    <SettingRow label="Room" value={joinRoom.name ?? joinRoom.code} />
+                    <SettingRow label="Session" value={joinRoom.name ?? joinRoom.code} />
                     <SettingRow label="Work period" value={`${joinRoom.timingSettings.workMinutes} min`} />
                     <SettingRow label="Break" value={`${joinRoom.timingSettings.breakMinutes} min`} />
                     <SettingRow label="Prosochai" value={joinRoom.sharePrompts ? 'Shared by host' : 'Not shared'} />
                   </dl>
+                  <p className="mt-3 text-xs text-indigo-700 bg-indigo-50 rounded-lg px-3 py-2">
+                    Settings have been loaded above — you can review them before joining.
+                  </p>
                 </div>
 
                 {joinIsHost ? (
                   <div className="space-y-3">
                     <p className="text-sm text-emerald-700 font-medium bg-emerald-50 rounded-lg px-3 py-2">
-                      This is your room — you&rsquo;ll join as the host.
+                      This is your session — you&rsquo;ll join as the host.
                     </p>
-                    <Button onClick={() => { const timing = computeRoomTiming(joinRoom); onCoworkHostStart(joinRoom, timing?.startMs ?? Date.now()); }} className="w-full">
+                    <Button onClick={handleJoinSession} className="w-full">
                       Join as Host
                     </Button>
                   </div>
@@ -891,24 +1391,19 @@ export default function Main({
                     {joinRoom.sharePrompts && (
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="radio" name="joinMode" value="host-prompts" checked={joinMode === 'host-prompts'} onChange={() => setJoinMode('host-prompts')} className="text-indigo-600" />
-                        <span className="text-sm text-gray-700">Use host&rsquo;s prompts</span>
+                        <span className="text-sm text-gray-700">Use host&rsquo;s Prosochai</span>
                       </label>
                     )}
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input type="radio" name="joinMode" value="own-prompts" checked={joinMode === 'own-prompts'} onChange={() => setJoinMode('own-prompts')} className="text-indigo-600" />
                       <span className="text-sm text-gray-700">
-                        {joinRoom.sharePrompts ? `Use my own Prosochai (instead of host's)` : 'Add my own Prosochai'}
+                        {joinRoom.sharePrompts ? `Use my own Prosochai` : 'Add my own Prosochai'}
                       </span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input type="radio" name="joinMode" value="no-prompts" checked={joinMode === 'no-prompts'} onChange={() => setJoinMode('no-prompts')} className="text-indigo-600" />
                       <span className="text-sm text-gray-700">No Prosochai</span>
                     </label>
-                    {joinRoom.mindfulnessOnly && joinMode === 'no-prompts' && (
-                      <p className="text-xs text-amber-700 bg-amber-50 rounded p-2">
-                        This is a mindfulness-only room. Joining without prompts means you&rsquo;ll just see a running timer with no content.
-                      </p>
-                    )}
                     <Button onClick={handleJoinSession} className="w-full">
                       Join Session
                     </Button>
@@ -923,7 +1418,7 @@ export default function Main({
   );
 }
 
-// ── Sub-components ──
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (

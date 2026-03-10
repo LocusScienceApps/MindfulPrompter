@@ -22,6 +22,11 @@ export function getDefaults(): Settings {
     bothMindfulnessScope: 'work-only',
     // Global
     playSound: true,
+    // Timing preference
+    startType: 'now',
+    // Coworking preference
+    isCoworking: false,
+    sharePrompts: false,
   };
 }
 
@@ -89,6 +94,14 @@ export function generatePresetName(settings: Settings): string {
     diffs.push('mindfulness only');
   if (settings.useTimedWork && !settings.useMindfulness)
     diffs.push('Pomodoro only');
+
+  if (settings.isCoworking)
+    diffs.push('coworking');
+
+  if (settings.startType === 'specific' && settings.startTime)
+    diffs.push(`starts ${settings.startTime}`);
+  if (settings.startType === 'recurring' && settings.startDays?.length)
+    diffs.push(`${settings.startDays.join('/')} ${settings.startTime ?? ''}`);
 
   if (diffs.length === 0) return 'Custom preset';
   return diffs.slice(0, 3).join(', ');

@@ -1,6 +1,68 @@
-# MindfulPrompter — Session History
+# Prosochai — Session History
 
 Reverse chronological order (most recent first).
+
+---
+
+## Session 31 — 2026-03-10 (wmben PC — app rename + bug fixes + room card redesign + WhenSection headings)
+
+**What was done:**
+
+**App rename: MindfulPrompter → Prosochai**
+- `layout.tsx`: title + description updated
+- `App.tsx`: nav logo text
+- `HelpModal.tsx`: notification permission text
+- `NotificationBanner.tsx`: two instances of brand name
+- `Timer.tsx`: notification fallback title
+- `defaults.ts`: `generateRoomName` hybrid label ("Prosochai" not yet fully consistent — see pending fixes)
+
+**Bug fixes:**
+- Customize.tsx: toggling Prosochai ON while Pomodoros active no longer fails validation (resets `promptIntervalMinutes` to `derivedInterval`)
+- Main.tsx: same fix for Pomodoro toggle ON while Prosochai active
+- cowork.ts: `stripUndefined()` helper added; applied to `createRoom` and `updateRoom` Firebase writes — prevents "value argument contains undefined" error when `promptSettings: undefined`
+
+**Delete UX overhaul (presets + rooms, Main.tsx + Summary.tsx):**
+- Old: two-click in-dropdown confirm
+- New: click Delete → close dropdown → inline red confirmation panel below item with Cancel + Confirm delete buttons
+
+**Button redesign:**
+- Start/Join buttons moved to LEFT of item name on preset/room cards
+- Styled as solid emerald pill buttons
+- Play icon (▶) removed from button text
+- Enter key shortcut removed
+
+**Room card two-row layout (new in Session 31):**
+- Row 1: state badge (always shown) + room name + Options ▾
+- Row 2: Join button (always present for all room states)
+- Badge label: "In progress" → **"Live"**
+- Join button: bright green when joinable (active or ≤5 min to start), grayed+disabled otherwise with native `title` tooltip
+
+**WhenSection headings:**
+- Added `heading` and `headingHint` props to `WhenSection.tsx`
+- Main.tsx: heading is "Start a solo session" / "Schedule a new coworking room" based on toggle
+- Main.tsx: hint line below heading when a room is selected + toggle OFF (directs to Join button or Options ▾)
+- Summary.tsx: same heading logic (no hint)
+
+**Selection highlight:**
+- Preset cards: indigo border/bg when selected
+- Room cards: emerald border/bg when selected
+
+**Summary page cleanup (Settings Updated view):**
+- Removed PresetList and RoomList from main view
+- Removed bottom "Change Settings" button from main view
+- "Save Changes to Preset/Room" button → `save` variant (indigo) to distinguish from green session-start actions
+
+**Button.tsx:**
+- Added `save` variant (indigo): `bg-indigo-600 text-white hover:bg-indigo-700`
+
+**Pending from this session:**
+- Tauri window title still says "MindfulPrompter" (fix: `src-tauri/tauri.conf.json`)
+- `generateRoomName` hybrid case still says "mindfulness" not "Prosochai" (`defaults.ts` line 104)
+- Copy button has no visual feedback
+
+**Files changed:** `src/app/layout.tsx`, `src/components/App.tsx`, `src/components/ui/HelpModal.tsx`, `src/components/ui/NotificationBanner.tsx`, `src/components/ui/Button.tsx`, `src/components/ui/WhenSection.tsx`, `src/components/screens/Main.tsx`, `src/components/screens/Customize.tsx`, `src/components/screens/Summary.tsx`, `src/components/screens/Timer.tsx`, `src/lib/cowork.ts`
+
+**TypeScript:** Clean ✅
 
 ---
 

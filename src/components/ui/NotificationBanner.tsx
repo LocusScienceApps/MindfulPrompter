@@ -40,7 +40,7 @@ export default function NotificationBanner() {
           <div className="space-y-1">
             <p className="font-semibold text-amber-800">Notifications are blocked</p>
             <p className="text-amber-700">
-              Without notifications, MindfulPrompter can't reach you when you're working
+              Without notifications, Prosochai can't reach you when you're working
               in another window — the whole point of the app.
             </p>
             <p className="text-amber-700 mt-1">
@@ -69,7 +69,7 @@ export default function NotificationBanner() {
           <p className="font-semibold text-indigo-800">Enable notifications for this app</p>
           <p className="text-indigo-700">
             When you're working in Word, your browser, or any other app,
-            MindfulPrompter needs browser notifications to reach you — otherwise
+            Prosochai needs browser notifications to reach you — otherwise
             prompts only appear when you already have this tab open in front of you.
           </p>
           <div className="flex gap-2 pt-1">

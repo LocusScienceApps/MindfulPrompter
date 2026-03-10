@@ -45,7 +45,7 @@ function getRoomSortKey(room: CoworkRoom): { group: 0 | 1 | 2; sortMs: number } 
 
 function formatRoomBadge(room: CoworkRoom): { label: string; colorClass: string } {
   const timing = computeRoomTiming(room);
-  if (timing?.isActive) return { label: 'In progress', colorClass: 'bg-emerald-100 text-emerald-700' };
+  if (timing?.isActive) return { label: 'Live', colorClass: 'bg-emerald-100 text-emerald-700' };
   const formatTime = (ms: number) => {
     const d = new Date(ms);
     const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -173,15 +173,10 @@ export default function SettingsUpdated({
   };
 
   const handlePresetDelete = (slot: PresetSlot) => {
-    if (confirmDeleteSlot === slot) {
-      deletePreset(slot);
-      if (slot === postSaveSelectedSlot) { setPostSaveSelectedSlot(null); setPostSaveSelectedName(''); }
-      refreshPresetList();
-      setConfirmDeleteSlot(null);
-    } else {
-      setConfirmDeleteSlot(slot);
-      setRenamingSlot(null);
-    }
+    deletePreset(slot);
+    if (slot === postSaveSelectedSlot) { setPostSaveSelectedSlot(null); setPostSaveSelectedName(''); }
+    refreshPresetList();
+    setConfirmDeleteSlot(null);
   };
 
   const handlePresetLoad = (slot: PresetSlot) => {
@@ -196,15 +191,11 @@ export default function SettingsUpdated({
   // ── Room handlers ──
 
   const handleDeleteRoom = async (code: string) => {
-    if (deletingRoom === code) {
-      try {
-        await deleteFirebaseRoom(code);
-        setHostedRooms((prev) => prev.filter((r) => r.code !== code));
-      } catch (e) { console.error(e); }
-      setDeletingRoom(null);
-    } else {
-      setDeletingRoom(code);
-    }
+    try {
+      await deleteFirebaseRoom(code);
+      setHostedRooms((prev) => prev.filter((r) => r.code !== code));
+    } catch (e) { console.error(e); }
+    setDeletingRoom(null);
   };
 
   const handleRenameRoom = async (code: string) => {
@@ -339,7 +330,7 @@ export default function SettingsUpdated({
         {expand && (
           <div className="mt-3 space-y-2">
             {presetList.map(({ slot, preset }) => (
-              <div key={slot} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
+              <div key={slot} className={`rounded-lg border px-3 py-2 space-y-2 transition-colors ${postSaveSelectedSlot === slot ? 'border-indigo-400 bg-indigo-50' : 'border-indigo-200 bg-white'}`}>
                 {renamingSlot === slot ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -355,18 +346,18 @@ export default function SettingsUpdated({
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { handlePresetLoad(slot); onBegin(); }}
+                      className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
+                    >
+                      Start
+                    </button>
                     <span
                       className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
                       onClick={() => handlePresetLoad(slot)}
                     >
                       {slot} — {preset.name}
                     </span>
-                    <button
-                      onClick={() => { handlePresetLoad(slot); onBegin(); }}
-                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
-                    >
-                      ▶ Start
-                    </button>
                     <div className="relative" data-dropdown>
                       <button
                         onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
@@ -389,13 +380,22 @@ export default function SettingsUpdated({
                             Rename
                           </button>
                           <button
-                            onClick={() => { setOpenDropdownPreset(null); handlePresetDelete(slot); }}
-                            className={`w-full px-3 py-2 text-left text-xs ${confirmDeleteSlot === slot ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                            onClick={() => { setOpenDropdownPreset(null); setConfirmDeleteSlot(slot); setRenamingSlot(null); }}
+                            className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
                           >
-                            {confirmDeleteSlot === slot ? 'Confirm delete?' : 'Delete'}
+                            Delete
                           </button>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+                {confirmDeleteSlot === slot && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                    <p className="text-xs text-red-800">Delete this preset permanently? This cannot be undone.</p>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => setConfirmDeleteSlot(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                      <button onClick={() => handlePresetDelete(slot)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm delete</button>
                     </div>
                   </div>
                 )}
@@ -430,8 +430,16 @@ export default function SettingsUpdated({
               const timing = computeRoomTiming(room);
               const badge = formatRoomBadge(room);
               const isActive = timing?.isActive ?? false;
+              const now = Date.now();
+              const FIVE_MIN_MS = 5 * 60 * 1000;
+              const futureStartMs = timing?.nextStartMs ?? timing?.startMs ?? 0;
+              const isSoon = !isActive && (timing?.isFuture || !!timing?.nextStartMs) && (futureStartMs - now <= FIVE_MIN_MS);
+              const joinable = isActive || isSoon;
+              const isEnded = !isActive && !timing?.isFuture && !timing?.nextStartMs;
+              const joinStartMs = isActive ? (timing?.startMs ?? Date.now()) : futureStartMs;
+              const joinTooltip = !joinable ? (isEnded ? 'This session has ended' : 'You can join 5 minutes before it starts') : undefined;
               return (
-                <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
+                <div key={room.code} className={`rounded-lg border px-3 py-2 space-y-2 transition-colors ${editContext?.type === 'cowork-room' && editContext.code === room.code ? 'border-emerald-400 bg-emerald-50' : 'border-emerald-200 bg-white'}`}>
                   {renamingRoomCode === room.code ? (
                     <div className="flex items-center gap-2">
                       <input
@@ -446,60 +454,71 @@ export default function SettingsUpdated({
                       <button onClick={() => setRenamingRoomCode(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
-                      <span
-                        className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
-                        onClick={() => onLoadRoom?.(room)}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
+                        <span
+                          className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
+                          onClick={() => onLoadRoom?.(room)}
+                        >
+                          {room.name ?? room.code}
+                          {room.recurrenceRule && (
+                            <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
+                          )}
+                        </span>
+                        <div className="relative" data-dropdown>
+                          <button
+                            onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
+                            className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
+                          >
+                            Options ▾
+                          </button>
+                          {openDropdownRoom === room.code && (
+                            <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); onLoadRoom?.(room); onCustomize(); }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Change Settings
+                              </button>
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Rename
+                              </button>
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
+                              </button>
+                              <button
+                                onClick={() => { setOpenDropdownRoom(null); setDeletingRoom(room.code); }}
+                                className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        disabled={!joinable}
+                        onClick={joinable ? () => onCoworkHostStart(room, joinStartMs) : undefined}
+                        title={joinTooltip}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {room.name ?? room.code}
-                        {room.recurrenceRule && (
-                          <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
-                        )}
-                      </span>
-                      {isActive && (
-                        <button
-                          onClick={() => onCoworkHostStart(room, timing!.startMs)}
-                          className="text-xs font-medium text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
-                        >
-                          ▶ Join Room
-                        </button>
-                      )}
-                      <div className="relative" data-dropdown>
-                        <button
-                          onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
-                          className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
-                        >
-                          Options ▾
-                        </button>
-                        {openDropdownRoom === room.code && (
-                          <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
-                            <button
-                              onClick={() => { setOpenDropdownRoom(null); onLoadRoom?.(room); onCustomize(); }}
-                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              Change Settings
-                            </button>
-                            <button
-                              onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
-                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              Rename
-                            </button>
-                            <button
-                              onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
-                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
-                            </button>
-                            <button
-                              onClick={() => { setOpenDropdownRoom(null); handleDeleteRoom(room.code); }}
-                              className={`w-full px-3 py-2 text-left text-xs ${deletingRoom === room.code ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
-                            >
-                              {deletingRoom === room.code ? 'Confirm delete?' : 'Delete'}
-                            </button>
-                          </div>
-                        )}
+                        Join
+                      </button>
+                    </div>
+                  )}
+                  {deletingRoom === room.code && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                      <p className="text-xs text-red-800">Delete this room permanently? This cannot be undone.</p>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => setDeletingRoom(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button onClick={() => handleDeleteRoom(room.code)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm delete</button>
                       </div>
                     </div>
                   )}
@@ -535,7 +554,7 @@ export default function SettingsUpdated({
             const timing = computeRoomTiming(generatedRoom);
             const startsWithin5Min = timing && (timing.isActive || (timing.isFuture && timing.startMs - Date.now() <= 5 * 60 * 1000));
             return startsWithin5Min ? (
-              <Button onClick={() => handleHostJoinSession(generatedRoom)} className="w-full">▶ Join Room Now</Button>
+              <Button onClick={() => handleHostJoinSession(generatedRoom)} className="w-full">Join Room Now</Button>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-gray-500">Room saved. You can join later from your rooms list.</p>
@@ -554,7 +573,7 @@ export default function SettingsUpdated({
           {localS.useMindfulness && (
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" checked={!hostSharePrompts} onChange={(e) => setHostSharePrompts(!e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-indigo-600" />
-              <span className="text-sm text-gray-700">Do NOT share my mindfulness prompts with guests</span>
+              <span className="text-sm text-gray-700">Do NOT share my Prosochai with guests</span>
             </label>
           )}
           <Button onClick={handleGenerateRoom} disabled={hostGenerating} className="w-full">
@@ -702,6 +721,7 @@ export default function SettingsUpdated({
             onStartNow={onBegin}
             onSchedule={onScheduledStart}
             onSaveRecurring={handleSaveRecurring}
+            heading={hostCowork ? 'Schedule a new coworking room' : 'Start a solo session'}
           />
 
           {scheduleSaved && (
@@ -732,9 +752,6 @@ export default function SettingsUpdated({
       </div>
 
       <SettingsDisplay settings={localS} onChange={handleLocalChange} />
-
-      <PresetList />
-      <RoomList />
 
       <div className="flex flex-col gap-3">
         {/* Cowork toggle — first */}
@@ -783,6 +800,7 @@ export default function SettingsUpdated({
                   }
                 }}
                 disabled={savingContext}
+                variant="save"
                 className="w-full"
               >
                 {savingContext
@@ -835,8 +853,6 @@ export default function SettingsUpdated({
 
         {/* Cowork form — only when cowork ON */}
         {hostCowork && <CoworkForm />}
-
-        <Button onClick={onCustomize} variant="secondary" className="w-full">Change Settings</Button>
       </div>
     </div>
   );

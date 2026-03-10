@@ -1,8 +1,8 @@
-# MindfulPrompter
+# Prosochai
 
 Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **blocking popup that forces the user to read and reflect on a mindfulness prompt before dismissing** — that's the whole point.
 
-**GitHub:** https://github.com/LocusScienceApps/MindfulPrompter
+**GitHub:** https://github.com/LocusScienceApps/MindfulPrompter (repo still named MindfulPrompter)
 **Batch file (feature gold standard):** `C:\Users\wmben\Coding\Mindfulness_Prompt_Bat\MindfulnessPrompter.bat`
 → Feature logic in the batch file is the reference standard. Its UI (console menus) is irrelevant.
 
@@ -12,14 +12,16 @@ Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **bl
 
 ## Current Status
 
-**Phase 2 in progress.** Session 30 complete — see [TODO.md](TODO.md) for next steps.
+**Phase 2 in progress.** Session 31 complete — see [TODO.md](TODO.md) for next steps.
 
 - Phase 1 ✅ (Sessions 1–21): all features matching batch file
-- Phase 2 🔄 (Sessions 22–30): Tauri + Firebase cowork — needs regression testing (TODO.md sections A–V)
+- Phase 2 🔄 (Sessions 22–31): Tauri + Firebase cowork — needs regression testing (TODO.md sections A–V)
+- **Major redesign (v2) planned** — see [docs/redesign-v2.md](docs/redesign-v2.md) for full spec; discuss in planning mode before implementing
 - Phase 3/4: optional accounts + paid tiers — post-traction only
 
 → Architecture decisions, distribution plan, phase details: [docs/architecture.md](docs/architecture.md)
 → Session notes: [docs/session-history.md](docs/session-history.md)
+→ Redesign v2 spec: [docs/redesign-v2.md](docs/redesign-v2.md)
 
 ---
 

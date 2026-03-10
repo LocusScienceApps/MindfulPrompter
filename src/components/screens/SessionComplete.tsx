@@ -77,13 +77,13 @@ function PomoHeading({ setsCompleted }: { setsCompleted: number }) {
     return (
       <h2 className="text-2xl font-bold text-gray-900">
         Congratulations! You&apos;ve just completed a{' '}
-        <strong>{setsCompleted}-set</strong> work session!
+        <strong>{setsCompleted}-set</strong> Pomodoro session!
       </h2>
     );
   }
   return (
     <h2 className="text-2xl font-bold text-gray-900">
-      Congratulations! You&apos;ve just completed a work session!
+      Congratulations! You&apos;ve just completed a Pomodoro session!
     </h2>
   );
 }
@@ -143,7 +143,7 @@ function PomoSummary({
 
           {/* Line 3: sets + long breaks */}
           <p>
-            The work session comprised <strong>{setsCompleted}</strong> sets
+            The Pomodoro session comprised <strong>{setsCompleted}</strong> sets
             separated by <strong>{longBreakCount}</strong>{' '}
             <em>{longBreakLabel}</em>{' '}
             {longBreakCount === 1 ? 'long break' : 'long breaks'}.
@@ -159,7 +159,7 @@ function PomoSummary({
         <>
           {/* Single set, multiple periods */}
           <p>
-            Your work session comprised <strong>{sessionsPerSet}</strong>{' '}
+            Your Pomodoro session comprised <strong>{sessionsPerSet}</strong>{' '}
             <em>{workLabel}</em> work {periodWord} separated by{' '}
             <strong>{breakCount}</strong> <em>{breakLabel}</em>{' '}
             {breakCount === 1 ? 'break' : 'breaks'}.
@@ -172,7 +172,7 @@ function PomoSummary({
       ) : (
         /* Single set, single period */
         <p>
-          Your work session comprised <strong>1</strong>{' '}
+          Your Pomodoro session comprised <strong>1</strong>{' '}
           <em>{workLabel}</em> work period. Congratulations again!
         </p>
       )}

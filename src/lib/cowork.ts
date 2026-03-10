@@ -29,6 +29,13 @@ async function generateUniqueCode(): Promise<string> {
   throw new Error('Could not generate a unique room code. Try again.');
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Firebase RTDB rejects undefined values. Strip them before writing. */
+function stripUndefined<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 // ── Room CRUD ───────────────────────────────────────────────────────────────
 
 export type NewRoomInput = Omit<CoworkRoom, 'code' | 'hostUid' | 'createdAt'>;
@@ -45,7 +52,7 @@ export async function createRoom(input: NewRoomInput): Promise<string> {
     createdAt: Date.now(),
   };
 
-  await set(ref(db, `rooms/${code}`), room);
+  await set(ref(db, `rooms/${code}`), stripUndefined(room));
   // Write host-rooms index for fast "my rooms" lookup
   await set(ref(db, `host-rooms/${uid}/${code}`), {
     createdAt: room.createdAt,
@@ -90,7 +97,7 @@ export async function updateRoom(
   if (!room) throw new Error('Room not found.');
   if (room.hostUid !== uid) throw new Error('Only the host can update this room.');
   const updated: CoworkRoom = { ...room, ...updates };
-  await set(ref(db, `rooms/${code}`), updated);
+  await set(ref(db, `rooms/${code}`), stripUndefined(updated));
   await set(ref(db, `host-rooms/${uid}/${code}`), {
     createdAt: updated.createdAt,
     name: updated.name ?? null,

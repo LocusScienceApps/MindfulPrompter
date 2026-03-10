@@ -8,8 +8,8 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "MindfulPrompter",
-  description: "Mindfulness prompts and focus sessions",
+  title: "Prosochai",
+  description: "Prosochai and Pomodoros — mindfulness prompts and timed work",
   manifest: "/manifest.json",
 };
 

@@ -48,6 +48,9 @@ export interface WhenSectionProps {
   onStartNow: () => void;
   onSchedule: (ms: number) => void;
   onSaveRecurring: () => void;
+  // optional heading override
+  heading?: string;
+  headingHint?: string;
 }
 
 export default function WhenSection({
@@ -65,6 +68,8 @@ export default function WhenSection({
   onStartNow,
   onSchedule,
   onSaveRecurring,
+  heading,
+  headingHint,
 }: WhenSectionProps) {
   const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const userTzAbbr = getTzInlineLabel(userTz);
@@ -78,7 +83,12 @@ export default function WhenSection({
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
-      <h3 className="text-sm font-semibold text-gray-700">When should this session start?</h3>
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700">{heading ?? 'When should this session start?'}</h3>
+        {headingHint && (
+          <p className="mt-0.5 text-xs text-gray-500">{headingHint}</p>
+        )}
+      </div>
 
       <div className="space-y-3">
         {/* ── Start Now ── */}

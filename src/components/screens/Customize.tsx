@@ -111,15 +111,18 @@ export default function Customize({
         </div>
       )}
 
-      {/* ── Section A: Timed Work Sessions ── */}
+      {/* ── Section A: Pomodoros ── */}
       <CollapsibleSection
-        title="Timed Work Sessions"
+        title="Pomodoros"
         isOn={s.useTimedWork}
         onToggle={(v) => {
           if (!v && !s.useMindfulness) return; // guard: both can't be off
-          update({ useTimedWork: v });
+          update({
+            useTimedWork: v,
+            ...(v && s.useMindfulness ? { promptIntervalMinutes: derivedInterval } : {}),
+          });
         }}
-        disabledReason={!s.useMindfulness ? 'Mindfulness prompts must be on if timed work is off' : undefined}
+        disabledReason={!s.useMindfulness ? 'Prosochai must be on if Pomodoros are off' : undefined}
       >
         <SettingField label="Work period length" helper={`Default: ${formatNum(modeDefaults.workMinutes)} minutes`}>
           <NumericInput
@@ -205,15 +208,18 @@ export default function Customize({
 
       {/* ── Section B: Mindfulness Prompts ── */}
       <CollapsibleSection
-        title="Mindfulness Prompts"
+        title="Prosochai"
         isOn={s.useMindfulness}
         onToggle={(v) => {
           if (!v && !s.useTimedWork) return; // guard: both can't be off
-          update({ useMindfulness: v });
+          update({
+            useMindfulness: v,
+            ...(v && s.useTimedWork ? { promptIntervalMinutes: derivedInterval } : {}),
+          });
         }}
-        disabledReason={!s.useTimedWork ? 'Timed work must be on if mindfulness prompts are off' : undefined}
+        disabledReason={!s.useTimedWork ? 'Pomodoros must be on if Prosochai is off' : undefined}
       >
-        <SettingField label="Mindfulness prompt" helper={`Default: "${modeDefaults.promptText}"`}>
+        <SettingField label="Prosochai text" helper={`Default: "${modeDefaults.promptText}"`}>
           <textarea
             value={promptRaw}
             onChange={(e) => { setPromptRaw(e.target.value); update({ promptText: e.target.value || modeDefaults.promptText }); }}
@@ -251,7 +257,7 @@ export default function Customize({
         )}
 
         {s.useTimedWork && (
-          <SettingField label="Which popups show the mindfulness prompt?" helper="By default, the prompt only appears at timed intervals during work.">
+          <SettingField label="Which popups show Prosochai?" helper="By default, Prosochai only appears at timed intervals during work.">
             <ScopeSelector value={s.bothMindfulnessScope ?? 'work-only'} onChange={(v) => update({ bothMindfulnessScope: v })} />
           </SettingField>
         )}
@@ -331,7 +337,7 @@ function YesNoToggle({ value, yesLabel = 'Yes', noLabel = 'No', onChange }: { va
 }
 
 const SCOPE_OPTIONS: { value: MindfulnessScope; label: string; description: string }[] = [
-  { value: 'work-only',   label: 'At work intervals only',           description: 'Prompt fires at timed intervals during work — not during breaks or transitions.' },
+  { value: 'work-only',   label: 'At work intervals only',           description: 'Prosochai appears at timed intervals during work — not during breaks or transitions.' },
   { value: 'breaks',      label: 'Intervals + at each break',        description: 'Also shown when a break starts and when the session ends.' },
   { value: 'work-starts', label: 'Intervals + returning from breaks', description: 'Also shown when returning to work after each break.' },
   { value: 'all',         label: 'All popups',                       description: 'Shown at intervals, at each break, and when returning to work.' },

@@ -3,7 +3,7 @@
 interface ButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'save' | 'secondary' | 'ghost';
   disabled?: boolean;
   className?: string;
   type?: 'button' | 'submit';
@@ -23,6 +23,8 @@ export default function Button({
   const variants = {
     primary:
       'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500 active:bg-emerald-800',
+    save:
+      'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 active:bg-indigo-800',
     secondary:
       'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-indigo-500 active:bg-gray-100',
     ghost:

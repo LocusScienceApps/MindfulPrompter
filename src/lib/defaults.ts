@@ -15,7 +15,7 @@ export function getDefaults(): Settings {
     numberOfSets: 1,
     hardBreak: false,
     // Mindfulness defaults
-    promptText: 'Are you doing what you should be doing?',
+    promptText: 'What are you doing right now? Should you be doing it?',
     promptIntervalMinutes: 15,
     dismissSeconds: 15,
     promptCount: 0, // 0 = run indefinitely (mindfulness-only mode only)
@@ -88,7 +88,7 @@ export function generatePresetName(settings: Settings): string {
   if (!settings.useTimedWork && settings.useMindfulness)
     diffs.push('mindfulness only');
   if (settings.useTimedWork && !settings.useMindfulness)
-    diffs.push('timed work only');
+    diffs.push('Pomodoro only');
 
   if (diffs.length === 0) return 'Custom preset';
   return diffs.slice(0, 3).join(', ');
@@ -107,7 +107,7 @@ export function generateRoomName(settings: Settings): string {
     return `${formatNum(settings.workMinutes)}m Pomodoro`;
   }
   if (settings.useMindfulness) {
-    return `Mindfulness every ${formatNum(settings.promptIntervalMinutes)}m`;
+    return `Prosochai every ${formatNum(settings.promptIntervalMinutes)}m`;
   }
   return 'Session';
 }

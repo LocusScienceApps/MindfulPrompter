@@ -1,6 +1,6 @@
-# MindfulPrompter TODO
+# Prosochai TODO
 
-## Status: Session 30 complete — regression testing needed
+## Status: Session 31 complete — regression testing needed + major redesign planned
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -16,6 +16,34 @@
 ### 6. ✅ Scheduling redesign + cowork toggle: implemented (Session 27) — **needs regression testing**
 ### 7. ✅ Row redesign + room badges + Summary.tsx overhaul: implemented (Session 29) — **needs regression testing**
 ### 8. ✅ Click-to-load + full room settings + Options ▾: implemented (Session 30) — **needs regression testing**
+### 9. ✅ UX polish: app rename → Prosochai, bug fixes, room card redesign, WhenSection headings: implemented (Session 31) — **needs regression testing**
+
+---
+
+## ⚠️ Pending small fixes (Session 31 leftovers)
+
+- [ ] **Tauri window title** still reads "MindfulPrompter" (visible in OS title bar / taskbar). Fix: `src-tauri/tauri.conf.json` → change `productName` / window title to "Prosochai". See Screenshot5 from session 31.
+- [ ] **`generateRoomName` in `src/lib/defaults.ts` line 110**: still returns `'Prosochai every ${X}m'` ← OK, but the hybrid case (line 104) returns `'${X}m Pomodoro + mindfulness'` — "mindfulness" should be "Prosochai".
+- [ ] **Copy button feedback**: currently no visual cue when room code is copied. Should show "Copied!" or similar animation. Research best practice and implement.
+
+---
+
+## ⚠️ Major redesign planned (DO NOT IMPLEMENT until planning discussion)
+
+Full spec: [docs/redesign-v2.md](docs/redesign-v2.md)
+
+**First step for next session:** Open in planning mode, read `docs/redesign-v2.md`, and discuss/clarify before writing any code.
+
+Key themes:
+- Timing and coworking settings become first-class settings (displayed + editable on main page)
+- No more separate Summary/Settings-Updated page
+- All presets include timing + coworking settings
+- New "saved non-preset sessions" section (replaces coworking rooms section)
+- Settings editable inline on main page (unlock toggle) — no separate Customize page
+- New bottom-button logic for all session states
+- Redesigned coworking join flow
+- Backend admin tool for owner defaults
+- Minor: rename "rooms" → "sessions" throughout
 
 ---
 
@@ -111,14 +139,17 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 - [ ] Then click "Change Settings" (bottom button) → Customize opens tied to that room
 - [ ] `Options ▾` dropdown: "Change Settings", "Rename", "Show code" / "Hide code", "Delete"
 - [ ] "Change Settings" in dropdown: loads room settings + navigates to Customize
-- [ ] `▶ Join Room` button is ONLY shown on "In progress" rooms; clicking starts timer as host
-- [ ] State badge: "In progress" (green), "Starts [date] at HH:mm" (indigo), "Ended [date] at HH:mm" (gray)
+- [ ] **Two-row card layout (Session 31):** Row 1: state badge + room name + Options ▾. Row 2: Join button (always present)
+- [ ] **Join button states:** Active or ≤5 min to start → bright green, enabled. >5 min → grayed/disabled, tooltip "You can join 5 minutes before it starts". Ended → grayed/disabled, tooltip "This session has ended"
+- [ ] State badge: **"Live"** (green, Session 31), "Starts [date] at HH:mm" (indigo), "Ended [date] at HH:mm" (gray)
 - [ ] Recurring rooms show `↻` icon; hovering shows tooltip "Recurring session"
 - [ ] "Rename": inline rename; Enter/Save calls Firebase updateRoom; Escape cancels
 - [ ] "Show code" / "Hide code": toggles code display below row
 - [ ] "Delete": confirm pattern
 - [ ] Clicking outside dropdown closes it
-- [ ] Room order: In Progress first → Upcoming (soonest first) → Ended (most recent first)
+- [ ] Room order: Live first → Upcoming (soonest first) → Ended (most recent first)
+- [ ] **WhenSection heading (Session 31):** "Start a solo session" when cowork toggle OFF; "Schedule a new coworking room" when ON
+- [ ] **WhenSection hint (Session 31, Main.tsx only):** When room selected + toggle OFF → hint below heading
 
 ### J. Room full settings restore (new in Session 30)
 - [ ] Create a room with non-default settings (e.g. 20-min work, 2-sec dismiss, custom prompt text)

@@ -1,9 +1,43 @@
 'use client';
 
+import { useState } from 'react';
 import type { Settings, MindfulnessScope } from '@/lib/types';
 import { formatNum } from '@/lib/format';
 import { dividesEvenly } from '@/lib/validation';
 import { getDefaults as getStoredDefaults } from '@/lib/storage';
+
+function SectionTooltip({ children, tooltip, wikiUrl }: {
+  children: React.ReactNode;
+  tooltip: React.ReactNode;
+  wikiUrl?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <span
+        className="underline decoration-dotted cursor-help"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onFocus={() => setShow(true)}
+        onBlur={() => setShow(false)}
+        tabIndex={0}
+        role="button"
+      >
+        {children}
+      </span>
+      {show && (
+        <span className="absolute left-0 top-full mt-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left font-normal">
+          {tooltip}{' '}
+          {wikiUrl && (
+            <a href={wikiUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-100 underline">
+              Learn more on Wikipedia →
+            </a>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface SettingsDisplayProps {
   settings: Settings;
@@ -116,13 +150,20 @@ export default function SettingsDisplay({ settings, onChange }: SettingsDisplayP
             checked={s.useTimedWork}
             onChange={handleTimedWorkToggle}
             disabled={!s.useMindfulness}
-            title={!s.useMindfulness ? 'Turn on Mindfulness Prompts first' : undefined}
+            title={!s.useMindfulness ? 'Turn on Prosochai first' : undefined}
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/images/tomato.png" alt="" className="h-8 w-auto shrink-0" />
           <div className="min-w-0">
-            <div className="font-semibold text-gray-900">Timed Work Sessions</div>
-            <div className="text-xs text-gray-500">Pomodoro-style work periods and breaks.</div>
+            <div className="font-semibold text-gray-900">
+              <SectionTooltip
+                tooltip="The Pomodoro Technique breaks work into focused intervals (typically 25 minutes) followed by short breaks. It helps maintain focus and avoid burnout."
+                wikiUrl="https://en.wikipedia.org/wiki/Pomodoro_Technique"
+              >
+                Pomodoros
+              </SectionTooltip>
+            </div>
+            <div className="text-xs text-gray-500">Focused work periods with scheduled breaks.</div>
           </div>
         </div>
 
@@ -161,12 +202,18 @@ export default function SettingsDisplay({ settings, onChange }: SettingsDisplayP
             checked={s.useMindfulness}
             onChange={handleMindfulnessToggle}
             disabled={!s.useTimedWork}
-            title={!s.useTimedWork ? 'Turn on Timed Work Sessions first' : undefined}
+            title={!s.useTimedWork ? 'Turn on Pomodoros first' : undefined}
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/images/bowl.png" alt="" className="h-8 w-auto shrink-0" />
           <div className="min-w-0">
-            <div className="font-semibold text-gray-900">Mindfulness Prompts</div>
+            <div className="font-semibold text-gray-900">
+              <SectionTooltip
+                tooltip={<><em>Prosochai</em> (pro-so-KAI) — the plural of <em>prosoche</em>, the ancient Stoic practice of self-attention: brief, scheduled interruptions to check whether what you&apos;re doing is what you mean to be doing.</>}
+              >
+                Prosochai
+              </SectionTooltip>
+            </div>
             <div className="text-xs text-gray-500">Timed pop-up reminders that make you stop and reflect.</div>
           </div>
         </div>
@@ -174,8 +221,8 @@ export default function SettingsDisplay({ settings, onChange }: SettingsDisplayP
         {s.useMindfulness && (
           <div className="border-t border-gray-100 px-5 pb-4 pt-3">
             <dl className="space-y-2.5">
-              <SettingRow label="Prompt" value={`"${s.promptText}"`} />
-              <SettingRow label="Prompt every" value={`${formatNum(s.promptIntervalMinutes)} minutes`} />
+              <SettingRow label="Text" value={`"${s.promptText}"`} />
+              <SettingRow label="Every" value={`${formatNum(s.promptIntervalMinutes)} minutes`} />
               <SettingRow label="Dismiss delay" value={`${s.dismissSeconds} seconds`} />
               {!s.useTimedWork && (
                 <SettingRow

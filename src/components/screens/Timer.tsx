@@ -153,7 +153,7 @@ function sendBrowserNotification(event: TimerEvent, playSound: boolean) {
     ? `${event.promptText}${event.body ? '\n' + event.body : ''}`
     : event.body || event.title;
 
-  new Notification(event.promptText || event.title || 'MindfulPrompter', {
+  new Notification(event.promptText || event.title || 'Prosochai', {
     body: body.replace(/\n/g, ' '),
     tag: 'mindful-prompter',
     icon: '/icon-192x192.png',

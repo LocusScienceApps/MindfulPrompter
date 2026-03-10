@@ -17,7 +17,7 @@ const FAQ: FaqItem[] = [
     a: (
       <div className="space-y-3">
         <p>
-          MindfulPrompter uses your browser's notification system to reach you when you're
+          Prosochai uses your browser's notification system to reach you when you're
           working elsewhere. A few things can block this:
         </p>
         <div>
@@ -141,7 +141,7 @@ const FAQ: FaqItem[] = [
       <p>
         One person hosts a session and generates a 6-character room code. Others enter
         that code to join and sync their timer to the host's. The host can optionally
-        share their mindfulness prompts with guests. All participants see the same
+        share their Prosochai with guests. All participants see the same
         work/break rhythm.
       </p>
     ),

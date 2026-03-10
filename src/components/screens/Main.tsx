@@ -64,8 +64,8 @@ function TaglineTooltip({
   wikiUrl,
 }: {
   text: string;
-  tooltip: string;
-  wikiUrl: string;
+  tooltip: React.ReactNode;
+  wikiUrl?: string;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -84,14 +84,16 @@ function TaglineTooltip({
       {show && (
         <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left">
           {tooltip}{' '}
-          <a
-            href={wikiUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-indigo-300 hover:text-indigo-100 underline"
-          >
-            Learn more on Wikipedia →
-          </a>
+          {wikiUrl && (
+            <a
+              href={wikiUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-300 hover:text-indigo-100 underline"
+            >
+              Learn more on Wikipedia →
+            </a>
+          )}
         </span>
       )}
     </span>
@@ -107,7 +109,7 @@ function getRoomSortKey(room: CoworkRoom): { group: 0 | 1 | 2; sortMs: number } 
 
 function formatRoomBadge(room: CoworkRoom): { label: string; colorClass: string } {
   const timing = computeRoomTiming(room);
-  if (timing?.isActive) return { label: 'In progress', colorClass: 'bg-emerald-100 text-emerald-700' };
+  if (timing?.isActive) return { label: 'Live', colorClass: 'bg-emerald-100 text-emerald-700' };
   const formatTime = (ms: number) => {
     const d = new Date(ms);
     const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -227,26 +229,6 @@ export default function Main({
 
   const refreshPresets = () => setPresets(listPresets());
 
-  // Enter key: start only when "now" + cowork OFF
-  const onStartRef = useRef(onStart);
-  onStartRef.current = onStart;
-  const startTypeRef = useRef(startType);
-  startTypeRef.current = startType;
-  const hostCoworkRef = useRef(hostCowork);
-  hostCoworkRef.current = hostCowork;
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter') return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-      if (startTypeRef.current === 'now' && !hostCoworkRef.current) {
-        onStartRef.current();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
-
   // ── Preset handlers ──
 
   const handleLoad = (slot: PresetSlot) => {
@@ -265,14 +247,9 @@ export default function Main({
   };
 
   const handleDelete = (slot: PresetSlot) => {
-    if (confirmDeleteSlot === slot) {
-      deletePreset(slot);
-      refreshPresets();
-      setConfirmDeleteSlot(null);
-    } else {
-      setConfirmDeleteSlot(slot);
-      setRenamingSlot(null);
-    }
+    deletePreset(slot);
+    refreshPresets();
+    setConfirmDeleteSlot(null);
   };
 
   // ── Host handlers ──
@@ -355,17 +332,13 @@ export default function Main({
   };
 
   const handleDeleteRoom = async (code: string) => {
-    if (deletingRoom === code) {
-      try {
-        await deleteFirebaseRoom(code);
-        setHostedRooms((prev) => prev.filter((r) => r.code !== code));
-      } catch (e) {
-        console.error(e);
-      }
-      setDeletingRoom(null);
-    } else {
-      setDeletingRoom(code);
+    try {
+      await deleteFirebaseRoom(code);
+      setHostedRooms((prev) => prev.filter((r) => r.code !== code));
+    } catch (e) {
+      console.error(e);
     }
+    setDeletingRoom(null);
   };
 
   const handleRenameRoom = async (code: string) => {
@@ -429,27 +402,44 @@ export default function Main({
     return ka.sortMs - kb.sortMs;
   });
 
+  // Heading hint for WhenSection when a room is selected
+  const selectedRoomObj = selectedRoom ? hostedRooms.find((r) => r.code === selectedRoom.code) : null;
+  const selectedRoomTiming = selectedRoomObj ? computeRoomTiming(selectedRoomObj) : null;
+  const selectedRoomEnded = selectedRoomObj
+    ? (!selectedRoomTiming?.isActive && !selectedRoomTiming?.isFuture && !selectedRoomTiming?.nextStartMs)
+    : false;
+  const whenHeadingHint =
+    !hostCowork && selectedRoom
+      ? selectedRoomEnded
+        ? `To edit "${selectedRoom.name}", use Options ▾ in its card above.`
+        : `To join "${selectedRoom.name}" instead, click its Join button above. To edit it, use Options ▾.`
+      : undefined;
+
   return (
     <div className="space-y-6">
       {/* Hero header */}
       <div className="text-center space-y-1.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/logo.png" alt="MindfulPrompter" className="mx-auto h-16 w-auto" />
-        <h1 className="text-3xl font-bold text-gray-900">MindfulPrompter</h1>
-        <p className="text-base font-medium text-gray-800">Mindfulness Prompter and Work Session Timer</p>
-        <p className="text-sm text-gray-600">
-          — alone or with others, with{' '}
+        <img src="/images/logo.png" alt="Prosochai" className="mx-auto h-16 w-auto" />
+        <h1 className="text-3xl font-bold text-gray-900">Prosochai</h1>
+        <p className="text-base font-medium text-gray-800">
           <TaglineTooltip
-            text="Pomodoro-style sessions"
-            tooltip="The Pomodoro Technique breaks work into focused intervals (typically 25 minutes) followed by short breaks. It helps maintain focus and avoid burnout."
-            wikiUrl="https://en.wikipedia.org/wiki/Pomodoro_Technique"
+            text="Mindfulness Prompts"
+            tooltip={<>We call these <em>Prosochai</em> (pro-so-KAI) — the plural of <em>prosoche</em>, the ancient Stoic practice of self-attention: brief, scheduled interruptions to check whether what you&apos;re doing is what you mean to be doing.</>}
           />{' '}
           and{' '}
           <TaglineTooltip
+            text="Pomodoros"
+            tooltip="The Pomodoro Technique breaks work into focused intervals (typically 25 minutes) followed by short breaks. It helps maintain focus and avoid burnout."
+            wikiUrl="https://en.wikipedia.org/wiki/Pomodoro_Technique"
+          />{' '}
+          with{' '}
+          <TaglineTooltip
             text="behavioral nudges"
-            tooltip="Nudge theory uses small prompts and reminders to guide behavior without forcing change. Mindfulness prompts are a form of behavioral nudge."
+            tooltip="Nudge theory uses small prompts and reminders to guide behavior without forcing change. Prosochai are a form of behavioral nudge."
             wikiUrl="https://en.wikipedia.org/wiki/Nudge_theory"
           />
+          , alone or with others
         </p>
         {selectedPreset && !selectedRoom && (
           <p className="text-sm text-indigo-600">
@@ -479,7 +469,7 @@ export default function Main({
           {expandPresets && (
             <div className="mt-3 space-y-2">
               {presets.map(({ slot, preset }) => (
-                <div key={slot} className="rounded-lg border border-indigo-200 bg-white px-3 py-2">
+                <div key={slot} className={`rounded-lg border px-3 py-2 space-y-2 transition-colors ${selectedPreset?.slot === slot ? 'border-indigo-400 bg-indigo-50' : 'border-indigo-200 bg-white'}`}>
                   {renamingSlot === slot ? (
                     <div className="flex items-center gap-2">
                       <input
@@ -495,18 +485,18 @@ export default function Main({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { handleLoad(slot); onStart(); }}
+                        className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
+                      >
+                        Start
+                      </button>
                       <span
                         className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
                         onClick={() => handleLoad(slot)}
                       >
                         {slot} — {preset.name}
                       </span>
-                      <button
-                        onClick={() => { handleLoad(slot); onStart(); }}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
-                      >
-                        ▶ Start
-                      </button>
                       <div className="relative" data-dropdown>
                         <button
                           onClick={() => setOpenDropdownPreset(openDropdownPreset === slot ? null : slot)}
@@ -529,13 +519,22 @@ export default function Main({
                               Rename
                             </button>
                             <button
-                              onClick={() => { setOpenDropdownPreset(null); handleDelete(slot); }}
-                              className={`w-full px-3 py-2 text-left text-xs ${confirmDeleteSlot === slot ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                              onClick={() => { setOpenDropdownPreset(null); setConfirmDeleteSlot(slot); setRenamingSlot(null); }}
+                              className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
                             >
-                              {confirmDeleteSlot === slot ? 'Confirm delete?' : 'Delete'}
+                              Delete
                             </button>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+                  {confirmDeleteSlot === slot && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                      <p className="text-xs text-red-800">Delete this preset permanently? This cannot be undone.</p>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => setConfirmDeleteSlot(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button onClick={() => handleDelete(slot)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm delete</button>
                       </div>
                     </div>
                   )}
@@ -562,8 +561,16 @@ export default function Main({
                 const timing = computeRoomTiming(room);
                 const badge = formatRoomBadge(room);
                 const isActive = timing?.isActive ?? false;
+                const now = Date.now();
+                const FIVE_MIN_MS = 5 * 60 * 1000;
+                const futureStartMs = timing?.nextStartMs ?? timing?.startMs ?? 0;
+                const isSoon = !isActive && (timing?.isFuture || !!timing?.nextStartMs) && (futureStartMs - now <= FIVE_MIN_MS);
+                const joinable = isActive || isSoon;
+                const isEnded = !isActive && !timing?.isFuture && !timing?.nextStartMs;
+                const joinStartMs = isActive ? (timing?.startMs ?? Date.now()) : futureStartMs;
+                const joinTooltip = !joinable ? (isEnded ? 'This session has ended' : 'You can join 5 minutes before it starts') : undefined;
                 return (
-                  <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
+                  <div key={room.code} className={`rounded-lg border px-3 py-2 space-y-2 transition-colors ${selectedRoom?.code === room.code ? 'border-emerald-400 bg-emerald-50' : 'border-emerald-200 bg-white'}`}>
                     {renamingRoomCode === room.code ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -578,26 +585,19 @@ export default function Main({
                         <button onClick={() => setRenamingRoomCode(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
-                        <span
-                          className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
-                          onClick={() => { onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); }}
-                        >
-                          {room.name ?? room.code}
-                          {room.recurrenceRule && (
-                            <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
-                          )}
-                        </span>
-                        {isActive && (
-                          <button
-                            onClick={() => onCoworkHostStart(room, timing!.startMs)}
-                            className="text-xs font-medium text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
+                          <span
+                            className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
+                            onClick={() => { onLoadRoom?.(room); setSelectedRoom({ code: room.code, name: room.name ?? room.code }); setSelectedPreset(null); }}
                           >
-                            ▶ Join Room
-                          </button>
-                        )}
-                        <div className="relative" data-dropdown>
+                            {room.name ?? room.code}
+                            {room.recurrenceRule && (
+                              <span title="Recurring session" className="ml-1 text-xs text-gray-400 cursor-help">↻</span>
+                            )}
+                          </span>
+                          <div className="relative" data-dropdown>
                           <button
                             onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
                             className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
@@ -625,13 +625,31 @@ export default function Main({
                                 {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
                               </button>
                               <button
-                                onClick={() => { setOpenDropdownRoom(null); handleDeleteRoom(room.code); }}
-                                className={`w-full px-3 py-2 text-left text-xs ${deletingRoom === room.code ? 'text-red-600 hover:bg-red-50' : 'text-red-500 hover:bg-red-50'}`}
+                                onClick={() => { setOpenDropdownRoom(null); setDeletingRoom(room.code); }}
+                                className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
                               >
-                                {deletingRoom === room.code ? 'Confirm delete?' : 'Delete'}
+                                Delete
                               </button>
                             </div>
                           )}
+                        </div>
+                        </div>
+                        <button
+                          disabled={!joinable}
+                          onClick={joinable ? () => onCoworkHostStart(room, joinStartMs) : undefined}
+                          title={joinTooltip}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Join
+                        </button>
+                      </div>
+                    )}
+                    {deletingRoom === room.code && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                        <p className="text-xs text-red-800">Delete this room permanently? This cannot be undone.</p>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => setDeletingRoom(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                          <button onClick={() => handleDeleteRoom(room.code)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm delete</button>
                         </div>
                       </div>
                     )}
@@ -669,7 +687,7 @@ export default function Main({
           {selectedRoom ? 'Make this a NEW ' : 'Make this a '}
           <span className="underline decoration-dotted cursor-help">
             Hosted Coworking Session
-            <Tooltip text="Start a shared session that others can join using a room code. Everyone syncs to your timer — and optionally your mindfulness prompts." />
+            <Tooltip text="Start a shared session that others can join using a room code. Everyone syncs to your timer — and optionally your Prosochai." />
           </span>
         </span>
       </div>
@@ -690,6 +708,8 @@ export default function Main({
         onStartNow={onStart}
         onSchedule={onScheduledStart}
         onSaveRecurring={handleSaveRecurring}
+        heading={hostCowork ? 'Schedule a new coworking room' : 'Start a solo session'}
+        headingHint={whenHeadingHint}
       />
 
       {scheduleSaved && (
@@ -722,7 +742,7 @@ export default function Main({
                 const timing = computeRoomTiming(generatedRoom);
                 const startsWithin5Min = timing && (timing.isActive || (timing.isFuture && timing.startMs - Date.now() <= 5 * 60 * 1000));
                 return startsWithin5Min ? (
-                  <Button onClick={handleHostJoinSession} className="w-full">▶ Join Room Now</Button>
+                  <Button onClick={handleHostJoinSession} className="w-full">Join Room Now</Button>
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm text-gray-500">Room saved. You can join later from your rooms list.</p>
@@ -763,12 +783,12 @@ export default function Main({
                         className={`w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 ${locked ? 'opacity-40 pointer-events-none' : ''}`}
                       />
                       <span className={`text-sm ${locked ? 'text-gray-400' : 'text-gray-700'}`}>
-                        Do NOT share my mindfulness prompts with guests
+                        Do NOT share my Prosochai with guests
                       </span>
                     </div>
                     {locked && showShareLockedTip && (
                       <p className="mt-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
-                        In a mindfulness-only session, sharing prompts is the whole point — guests can&rsquo;t opt out.
+                        In a Prosochai-only session, sharing Prosochai is the whole point — guests can&rsquo;t opt out.
                       </p>
                     )}
                   </div>
@@ -852,7 +872,7 @@ export default function Main({
                     <SettingRow label="Room" value={joinRoom.name ?? joinRoom.code} />
                     <SettingRow label="Work period" value={`${joinRoom.timingSettings.workMinutes} min`} />
                     <SettingRow label="Break" value={`${joinRoom.timingSettings.breakMinutes} min`} />
-                    <SettingRow label="Mindfulness prompts" value={joinRoom.sharePrompts ? 'Shared by host' : 'Not shared'} />
+                    <SettingRow label="Prosochai" value={joinRoom.sharePrompts ? 'Shared by host' : 'Not shared'} />
                   </dl>
                 </div>
 
@@ -867,7 +887,7 @@ export default function Main({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-700">Your mindfulness prompts:</p>
+                    <p className="text-sm font-medium text-gray-700">Your Prosochai:</p>
                     {joinRoom.sharePrompts && (
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="radio" name="joinMode" value="host-prompts" checked={joinMode === 'host-prompts'} onChange={() => setJoinMode('host-prompts')} className="text-indigo-600" />
@@ -877,12 +897,12 @@ export default function Main({
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input type="radio" name="joinMode" value="own-prompts" checked={joinMode === 'own-prompts'} onChange={() => setJoinMode('own-prompts')} className="text-indigo-600" />
                       <span className="text-sm text-gray-700">
-                        {joinRoom.sharePrompts ? `Use my own prompts (instead of host's)` : 'Add my own mindfulness prompts'}
+                        {joinRoom.sharePrompts ? `Use my own Prosochai (instead of host's)` : 'Add my own Prosochai'}
                       </span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input type="radio" name="joinMode" value="no-prompts" checked={joinMode === 'no-prompts'} onChange={() => setJoinMode('no-prompts')} className="text-indigo-600" />
-                      <span className="text-sm text-gray-700">No mindfulness prompts</span>
+                      <span className="text-sm text-gray-700">No Prosochai</span>
                     </label>
                     {joinRoom.mindfulnessOnly && joinMode === 'no-prompts' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded p-2">

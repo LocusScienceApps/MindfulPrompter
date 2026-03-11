@@ -169,7 +169,6 @@ export default function SettingsDisplay({ settings, onChange }: SettingsDisplayP
             <div className="font-semibold text-gray-900">
               <SectionTooltip
                 tooltip="The Pomodoro Technique breaks work into focused intervals (typically 25 minutes) followed by short breaks. It helps maintain focus and avoid burnout."
-                wikiUrl="https://en.wikipedia.org/wiki/Pomodoro_Technique"
               >
                 Pomodoros
               </SectionTooltip>

@@ -285,6 +285,8 @@ export default function Main({
   const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmSaveAsDefault, setConfirmSaveAsDefault] = useState(false);
   const [expandPresets, setExpandPresets] = useState(false);
   const [openDropdownPreset, setOpenDropdownPreset] = useState<PresetSlot | null>(null);
 
@@ -364,7 +366,8 @@ export default function Main({
 
   const handleToggleEdit = () => {
     if (editMode && isDirty) {
-      if (!window.confirm('Discard unsaved changes?')) return;
+      setConfirmDiscard(true);
+      return;
     }
     if (editMode) {
       setPendingSettings(settings);
@@ -372,6 +375,14 @@ export default function Main({
       setShowSavePreset(false);
     }
     setEditMode((v) => !v);
+  };
+
+  const handleConfirmDiscard = () => {
+    setConfirmDiscard(false);
+    setPendingSettings(settings);
+    setIntervalError('');
+    setShowSavePreset(false);
+    setEditMode(false);
   };
 
   // ── Preset handlers ──
@@ -606,10 +617,6 @@ export default function Main({
   // ── Rooms sorted / filtered ──
 
   const sortedRooms = [...hostedRooms]
-    .filter((room) => {
-      const t = computeRoomTiming(room);
-      return t?.isActive || t?.isFuture || !!t?.nextStartMs;
-    })
     .sort((a, b) => {
       const ka = getRoomSortKey(a);
       const kb = getRoomSortKey(b);
@@ -638,13 +645,11 @@ export default function Main({
           <TaglineTooltip
             text="Pomodoros"
             tooltip="The Pomodoro Technique breaks work into focused intervals (typically 25 minutes) followed by short breaks. It helps maintain focus and avoid burnout."
-            wikiUrl="https://en.wikipedia.org/wiki/Pomodoro_Technique"
           />{' '}
           with{' '}
           <TaglineTooltip
             text="behavioral nudges"
             tooltip="Nudge theory uses small prompts and reminders to guide behavior without forcing change. Prosochai are a form of behavioral nudge."
-            wikiUrl="https://en.wikipedia.org/wiki/Nudge_theory"
           />
           , alone or with others
         </p>
@@ -698,17 +703,26 @@ export default function Main({
         <SettingsDisplay settings={settings} onChange={onSettingsChange} />
       ) : (
         <div className="space-y-5">
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-700">
-            Edit mode — click <strong>Save options</strong> below when done, or toggle <strong>Edit</strong> off to discard.
-          </div>
+          {confirmDiscard ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 flex items-center justify-between gap-3">
+              <p className="text-xs text-amber-800">Discard unsaved changes?</p>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => setConfirmDiscard(false)} className="text-xs px-2.5 py-1 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Keep editing</button>
+                <button onClick={handleConfirmDiscard} className="text-xs px-2.5 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Discard</button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-700">
+              Edit mode — click <strong>Save options</strong> below when done, or toggle <strong>Edit</strong> off to discard.
+            </div>
+          )}
 
           {/* ── Pomodoro edit section ── */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Pomodoros</p>
-              <button
-                type="button"
-                onClick={() => {
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <Toggle
+                checked={p.useTimedWork}
+                onChange={() => {
                   if (!p.useTimedWork && !p.useMindfulness) return;
                   if (isFieldLocked('useTimedWork')) return;
                   updatePending({
@@ -718,16 +732,16 @@ export default function Main({
                 }}
                 disabled={isFieldLocked('useTimedWork') || (!p.useMindfulness && p.useTimedWork)}
                 title={!p.useMindfulness ? 'Prosochai must be on if Pomodoros are off' : undefined}
-                className={`flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 transition-colors ${
-                  p.useTimedWork ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                } ${(isFieldLocked('useTimedWork') || (!p.useMindfulness && p.useTimedWork)) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <span className={`inline-block w-2 h-2 rounded-full ${p.useTimedWork ? 'bg-indigo-500' : 'bg-gray-400'}`} />
-                {p.useTimedWork ? 'On' : 'Off'}
-              </button>
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/tomato.png" alt="" className="h-8 w-auto shrink-0" />
+              <div className="min-w-0">
+                <div className="font-semibold text-gray-900">Pomodoros</div>
+                <div className="text-xs text-gray-500">Focused work periods with scheduled breaks.</div>
+              </div>
             </div>
-            {p.useTimedWork ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
+            {p.useTimedWork && (
+              <div className="border-t border-gray-100 px-5 pb-4 pt-3 space-y-5">
                 <SettingField label="Work period" helper={`Default: ${formatNum(modeDefaults.workMinutes)} minutes`}>
                   <NumericInput
                     value={p.workMinutes}
@@ -805,35 +819,30 @@ export default function Main({
                   />
                 </div>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-3 text-sm text-gray-400 italic">
-                Pomodoros disabled — click On/Off above to enable
-              </div>
             )}
           </div>
 
           {/* ── Prosochai edit section ── */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Prosochai</p>
-              <button
-                type="button"
-                onClick={() => {
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <Toggle
+                checked={p.useMindfulness}
+                onChange={() => {
                   if (!p.useMindfulness && !p.useTimedWork) return;
                   updatePending({ useMindfulness: !p.useMindfulness });
                 }}
                 disabled={!p.useTimedWork && p.useMindfulness}
                 title={!p.useTimedWork ? 'Pomodoros must be on if Prosochai is off' : undefined}
-                className={`flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 transition-colors ${
-                  p.useMindfulness ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                } ${(!p.useTimedWork && p.useMindfulness) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <span className={`inline-block w-2 h-2 rounded-full ${p.useMindfulness ? 'bg-indigo-500' : 'bg-gray-400'}`} />
-                {p.useMindfulness ? 'On' : 'Off'}
-              </button>
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/bowl.png" alt="" className="h-8 w-auto shrink-0" />
+              <div className="min-w-0">
+                <div className="font-semibold text-gray-900">Prosochai</div>
+                <div className="text-xs text-gray-500">Timed pop-up reminders that make you stop and reflect.</div>
+              </div>
             </div>
-            {p.useMindfulness ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
+            {p.useMindfulness && (
+              <div className="border-t border-gray-100 px-5 pb-4 pt-3 space-y-5">
                 <SettingField label="Prosochai text" helper={`Default: "${modeDefaults.promptText}"`}>
                   <textarea
                     value={p.promptText}
@@ -898,10 +907,6 @@ export default function Main({
                     </div>
                   </SettingField>
                 )}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-3 text-sm text-gray-400 italic">
-                Prosochai disabled — click On/Off above to enable
               </div>
             )}
           </div>
@@ -1255,35 +1260,58 @@ export default function Main({
       {/* ── Save options (edit mode with changes) ── */}
       {editMode && isDirty && (
         <div className="rounded-2xl border border-indigo-300 bg-indigo-50 p-4 space-y-3">
-          <p className="text-sm font-semibold text-indigo-800">Save changes?</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleSaveAsDefault}
-              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-            >
-              Save as default
-            </button>
-            <button
-              onClick={() => setShowSavePreset((v) => !v)}
-              className="rounded-lg border-2 border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:border-indigo-500 transition-colors"
-            >
-              Save as preset…
-            </button>
-            {loadedRoomCode && (
-              <button
-                onClick={handleSaveToRoom}
-                className="rounded-lg border-2 border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:border-emerald-500 transition-colors"
-              >
-                Save to session
-              </button>
-            )}
-            <button
-              onClick={handleApply}
-              className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 hover:border-gray-400 transition-colors"
-            >
-              Apply (don&apos;t save)
-            </button>
-          </div>
+          {confirmSaveAsDefault ? (
+            <>
+              <p className="text-sm font-semibold text-gray-900">Replace your saved defaults?</p>
+              <p className="text-xs text-gray-600">This will overwrite your current default settings. You can always change them again later.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmSaveAsDefault(false)}
+                  className="rounded-lg bg-gray-700 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setConfirmSaveAsDefault(false); handleSaveAsDefault(); }}
+                  className="rounded-lg border-2 border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:border-red-500 transition-colors"
+                >
+                  Yes, replace defaults
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-indigo-800">Save changes?</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleApply}
+                  className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+                >
+                  For next session
+                </button>
+                <button
+                  onClick={() => setShowSavePreset((v) => !v)}
+                  className="rounded-lg border-2 border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:border-indigo-500 transition-colors"
+                >
+                  As preset…
+                </button>
+                {loadedRoomCode && (
+                  <button
+                    onClick={handleSaveToRoom}
+                    className="rounded-lg border-2 border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:border-emerald-500 transition-colors"
+                  >
+                    Save to session
+                  </button>
+                )}
+                <button
+                  onClick={() => setConfirmSaveAsDefault(true)}
+                  className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 hover:border-gray-400 transition-colors"
+                >
+                  As default
+                </button>
+              </div>
+            </>
+          )}
           {showSavePreset && (
             <div className="flex gap-2 items-center flex-wrap pt-1">
               <select

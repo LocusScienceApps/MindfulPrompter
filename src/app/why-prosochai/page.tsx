@@ -166,11 +166,13 @@ export default function WhyProsochai() {
             </TermEntry>
 
             <TermEntry id="pomodoro" term="Pomodoro">
-              A time management method developed by Francesco Cirillo: work in focused intervals, usually followed by short breaks. Its value is not urgency but structure. It gives work a container and makes time easier to feel. In Prosochai, Pomodoro is an optional companion tool that can be used by itself or combined with the prompts.
+              A time management method developed by Francesco Cirillo: work in focused intervals, usually followed by short breaks. Its value is not urgency but structure. It gives work a container and makes time easier to feel. In Prosochai, Pomodoro is an optional companion tool that can be used by itself or combined with the prompts.{' '}
+              <ExternalLink href="https://en.wikipedia.org/wiki/Pomodoro_Technique">Learn more →</ExternalLink>
             </TermEntry>
 
             <TermEntry id="nudge" term="Nudge">
-              A small change in the environment that makes one choice more likely without forcing it. In Prosochai, the prompt is a nudge: it makes checking in the default instead of something you have to remember on your own.
+              A small change in the environment that makes one choice more likely without forcing it. In Prosochai, the prompt is a nudge: it makes checking in the default instead of something you have to remember on your own.{' '}
+              <ExternalLink href="https://en.wikipedia.org/wiki/Nudge_theory">Learn more →</ExternalLink>
             </TermEntry>
           </div>
         </Section>

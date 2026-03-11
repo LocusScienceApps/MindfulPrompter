@@ -12,11 +12,12 @@ Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **bl
 
 ## Current Status
 
-**Phase 2 in progress.** Session 32 complete — see [TODO.md](TODO.md) for next steps.
+**Phase 2 in progress.** Session 33 complete — see [TODO.md](TODO.md) for next steps.
 
 - Phase 1 ✅ (Sessions 1–21): all features matching batch file
-- Phase 2 🔄 (Sessions 22–32): Tauri + Firebase cowork + redesign v2 Phase 1 — **needs regression testing (TODO.md A–P)**
+- Phase 2 🔄 (Sessions 22–33): Tauri + Firebase cowork + redesign v2 Phase 1 — **needs regression testing (TODO.md A–P)**
 - Redesign v2 Phase 1 ✅: single-screen design, edit-lock, timing/coworking in Settings, Sessions section, guest locked fields — all implemented
+- Session 33 ✅: tooltip fixes, "Why Prosochai?" modal + page, tauri-plugin-opener for external links
 - Phase 3/4: optional accounts + paid tiers — post-traction only
 
 → Architecture decisions, distribution plan, phase details: [docs/architecture.md](docs/architecture.md)
@@ -61,6 +62,8 @@ src/
     ui/
       SettingsDisplay.tsx    ← shared settings summary (sound toggle, Timed Work card, Mindfulness card)
       WhenSection.tsx        ← "When should this session start?" (now / specific / recurring)
+      HelpModal.tsx          ← FAQ modal (opened from top nav)
+      WhyProsochaiModal.tsx  ← "Why Prosochai?" story/about modal (opened from top nav)
       Button.tsx, NumberInput.tsx, ProgressRing.tsx, ToggleSwitch.tsx, etc.
   lib/
     types.ts      ← Settings (incl. startType/isCoworking/lockedFields), CoworkRoom, TimerEvent
@@ -96,6 +99,8 @@ public/
 - **Static export:** `output: 'export'` in `next.config.ts` — required for Tauri. No API routes.
 - **Web apps can't force windows to front:** That's WHY we need Tauri. Don't try to solve with browser APIs.
 - **Audio autoplay:** AudioContext must be initialized from a user gesture.
+- **External links in Tauri:** `<a target="_blank">` does nothing. Use `openExternal(url)` from `@/lib/tauri` which calls `tauri-plugin-opener` in Tauri and `window.open` in browser. Internal app routes (e.g. `/why-prosochai`) cannot be opened in an external browser from Tauri — use modals instead.
+- **Tooltip hover gap:** Tooltip components use `useRef` + `setTimeout` (200ms delay) for hide, with `onMouseEnter`/`onMouseLeave` on both the trigger wrapper and the popup itself. This lets the mouse cross the gap without the tooltip disappearing.
 
 ---
 
@@ -104,5 +109,5 @@ public/
 - `src-tauri/src/lib.rs` — `show_notification` (async), `get_notification_data`, `close_notification_window` (async)
 - `src-tauri/capabilities/default.json` — windows allowlist: `["main", "notification", "notification-overlay-*"]`
 - `src/app/popup/page.tsx` — popup UI: dark fullscreen bg, centered white card, handles overlay mode
-- `src/lib/tauri.ts` — `isTauri()`, `showNotificationWindow()`, `onNotificationDismissed()`
+- `src/lib/tauri.ts` — `isTauri()`, `openExternal()` (opens URL in default browser, Tauri+browser), `showNotificationWindow()`, `onNotificationDismissed()`
 - `src/components/screens/Timer.tsx` — calls Tauri or overlay depending on environment

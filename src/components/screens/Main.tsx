@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { openExternal } from '@/lib/tauri';
 import type { Settings, PresetSlot, CoworkRoom, GuestContentMode, CoworkDay, MindfulnessScope } from '@/lib/types';
 import {
   listPresets, renamePreset, deletePreset,
@@ -76,29 +77,49 @@ function Tooltip({ text }: { text: string }) {
 }
 
 function TaglineTooltip({
-  text, tooltip, wikiUrl,
-}: { text: string; tooltip: React.ReactNode; wikiUrl?: string }) {
+  text, tooltip, wikiUrl, linkText,
+}: { text: string; tooltip: React.ReactNode; wikiUrl?: string; linkText?: string }) {
   const [show, setShow] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show_ = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setShow(true);
+  };
+  const hide_ = () => {
+    hideTimer.current = setTimeout(() => setShow(false), 200);
+  };
+
   return (
-    <span className="relative inline-block">
+    <span
+      className="relative inline-block"
+      onMouseEnter={show_}
+      onMouseLeave={hide_}
+    >
       <span
         className="underline decoration-dotted cursor-help text-gray-700 hover:text-indigo-600 transition-colors"
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        onFocus={() => setShow(true)}
-        onBlur={() => setShow(false)}
+        onFocus={show_}
+        onBlur={hide_}
         tabIndex={0}
         role="button"
       >
         {text}
       </span>
       {show && (
-        <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left">
+        <span
+          className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left"
+          onMouseEnter={show_}
+          onMouseLeave={hide_}
+        >
           {tooltip}{' '}
           {wikiUrl && (
-            <a href={wikiUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-100 underline">
-              Learn more on Wikipedia →
-            </a>
+            <button
+              type="button"
+              onClick={() => openExternal(wikiUrl)}
+              className="text-indigo-300 hover:text-indigo-100 underline"
+            >
+              {linkText ?? 'Learn more →'}
+            </button>
           )}
         </span>
       )}
@@ -604,15 +625,7 @@ export default function Main({
     <div className="space-y-6">
 
       {/* ── Hero header ── */}
-      <div className="text-center space-y-1.5 relative">
-        <div className="absolute right-0 top-0">
-          <button
-            onClick={handleToggleEdit}
-            className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white"
-          >
-            {editMode ? '✕ Done' : '✎ Edit settings'}
-          </button>
-        </div>
+      <div className="text-center space-y-1.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo.png" alt="Prosochai" className="mx-auto h-16 w-auto" />
         <h1 className="text-3xl font-bold text-gray-900">Prosochai</h1>
@@ -647,13 +660,46 @@ export default function Main({
         )}
       </div>
 
+      {/* ── Sound + Edit settings cards ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Sound card */}
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4">
+            <Toggle
+              checked={settings.playSound}
+              onChange={() => onSettingsChange({ ...settings, playSound: !settings.playSound })}
+            />
+            <span className="text-xl shrink-0">{settings.playSound ? '🔊' : '🔇'}</span>
+            <div className="min-w-0">
+              <div className="font-semibold text-gray-900">Sound</div>
+              <div className="text-xs text-gray-500">Audio cues for timers.</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Edit settings card */}
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4">
+            <Toggle
+              checked={editMode}
+              onChange={handleToggleEdit}
+            />
+            <span className="text-xl shrink-0">✎</span>
+            <div className="min-w-0">
+              <div className="font-semibold text-gray-900">Edit</div>
+              <div className="text-xs text-gray-500">Customize settings.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Settings display (locked) or edit form ── */}
       {!editMode ? (
         <SettingsDisplay settings={settings} onChange={onSettingsChange} />
       ) : (
         <div className="space-y-5">
           <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-700">
-            Edit mode — click <strong>Save options</strong> below when done, or <strong>✕ Done</strong> to discard.
+            Edit mode — click <strong>Save options</strong> below when done, or toggle <strong>Edit</strong> off to discard.
           </div>
 
           {/* ── Pomodoro edit section ── */}
@@ -860,11 +906,6 @@ export default function Main({
             )}
           </div>
 
-          {/* ── Sound toggle in edit mode ── */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">{p.playSound ? '🔊' : '🔇'} Sound</span>
-            <Toggle checked={p.playSound} onChange={() => updatePending({ playSound: !p.playSound })} />
-          </div>
         </div>
       )}
 
@@ -919,11 +960,11 @@ export default function Main({
             }}
           />
           <span className="text-sm font-medium text-gray-700">
-            Host a{' '}
-            <span className="underline decoration-dotted cursor-help">
-              Coworking Session
-              <Tooltip text="Start a shared session that others can join using a room code. Everyone syncs to your timer — and optionally your Prosochai." />
-            </span>
+            Make this a{' '}
+            <TaglineTooltip
+              text="Coworking Session"
+              tooltip="Start a shared session that others can join using a room code. Everyone syncs to your timer — and optionally your Prosochai."
+            />
           </span>
           {isFieldLocked('isCoworking') && (
             <span className="text-xs text-gray-400 italic">(set by host)</span>
@@ -1336,10 +1377,10 @@ export default function Main({
           className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-600 hover:border-indigo-300 transition-colors text-left"
         >
           Join a{' '}
-          <span className="underline decoration-dotted cursor-help">
-            Coworking Session
-            <Tooltip text="Sync to a shared session hosted by someone else. Enter their session code to join their timer in real time." />
-          </span>
+          <TaglineTooltip
+            text="Coworking Session"
+            tooltip="Sync to a shared session hosted by someone else. Enter their session code to join their timer in real time."
+          />
           {' '}{expandJoin ? '▲' : '▼'}
         </button>
 

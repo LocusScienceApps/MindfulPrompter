@@ -12,6 +12,7 @@
     "core:window:allow-destroy",
     "core:window:allow-close",
     "fs:allow-appdata-read",
-    "fs:allow-appdata-write"
+    "fs:allow-appdata-write",
+    "opener:allow-open-url"
   ]
 }

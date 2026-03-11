@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { openExternal } from '@/lib/tauri';
 import type { Settings, MindfulnessScope } from '@/lib/types';
 import { formatNum } from '@/lib/format';
 import { dividesEvenly } from '@/lib/validation';
@@ -12,26 +13,46 @@ function SectionTooltip({ children, tooltip, wikiUrl }: {
   wikiUrl?: string;
 }) {
   const [show, setShow] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show_ = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setShow(true);
+  };
+  const hide_ = () => {
+    hideTimer.current = setTimeout(() => setShow(false), 200);
+  };
+
   return (
-    <span className="relative inline-block">
+    <span
+      className="relative inline-block"
+      onMouseEnter={show_}
+      onMouseLeave={hide_}
+    >
       <span
         className="underline decoration-dotted cursor-help"
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        onFocus={() => setShow(true)}
-        onBlur={() => setShow(false)}
+        onFocus={show_}
+        onBlur={hide_}
         tabIndex={0}
         role="button"
       >
         {children}
       </span>
       {show && (
-        <span className="absolute left-0 top-full mt-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left font-normal">
+        <span
+          className="absolute left-0 top-full mt-2 z-50 w-64 rounded-lg bg-gray-900 p-3 text-xs text-gray-100 shadow-lg text-left font-normal"
+          onMouseEnter={show_}
+          onMouseLeave={hide_}
+        >
           {tooltip}{' '}
           {wikiUrl && (
-            <a href={wikiUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-100 underline">
+            <button
+              type="button"
+              onClick={() => openExternal(wikiUrl)}
+              className="text-indigo-300 hover:text-indigo-100 underline"
+            >
               Learn more on Wikipedia →
-            </a>
+            </button>
           )}
         </span>
       )}
@@ -133,18 +154,8 @@ export default function SettingsDisplay({ settings, onChange }: SettingsDisplayP
 
   return (
     <div className="space-y-4">
-      {/* Sound toggle — small, top right */}
-      <div className="flex justify-end items-center gap-2 text-sm text-gray-500">
-        <span>{s.playSound ? '🔊' : '🔇'}</span>
-        <span>Sound</span>
-        <Toggle
-          checked={s.playSound}
-          onChange={() => onChange({ ...s, playSound: !s.playSound })}
-        />
-      </div>
-
       {/* Timed Work section card */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 px-5 py-4">
           <Toggle
             checked={s.useTimedWork}
@@ -196,7 +207,7 @@ export default function SettingsDisplay({ settings, onChange }: SettingsDisplayP
       </div>
 
       {/* Mindfulness section card */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 px-5 py-4">
           <Toggle
             checked={s.useMindfulness}

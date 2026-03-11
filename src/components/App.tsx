@@ -8,6 +8,7 @@ import { registerServiceWorker } from '@/lib/registerSW';
 import Main from './screens/Main';
 import NotificationBanner from './ui/NotificationBanner';
 import HelpModal from './ui/HelpModal';
+import WhyProsochaiModal from './ui/WhyProsochaiModal';
 import ScheduledStart from './screens/ScheduledStart';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
@@ -43,6 +44,7 @@ export default function App() {
   const [coworkRoomCode, setCoworkRoomCode] = useState<string | null>(null);
   const [isCoworkHost, setIsCoworkHost] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
 
   // Code of the currently-loaded cowork session on Main (distinct from coworkRoomCode
   // which tracks the active timer session). Used for "Save changes to session" logic.
@@ -392,6 +394,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {showWhy && <WhyProsochaiModal onClose={() => setShowWhy(false)} />}
       <div className="mx-auto max-w-2xl px-4 py-8">
         {/* Top bar */}
         <div className="mb-5 flex items-center justify-between">
@@ -407,12 +410,20 @@ export default function App() {
           ) : (
             <div />
           )}
-          <button
-            onClick={() => setShowHelp(true)}
-            className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
-          >
-            Help / FAQ
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowWhy(true)}
+              className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              Why Prosochai?
+            </button>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              Help / FAQ
+            </button>
+          </div>
         </div>
 
         {/* ── Solo schedule notice ── */}

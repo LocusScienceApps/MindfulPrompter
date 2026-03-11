@@ -1,6 +1,6 @@
 # Prosochai TODO
 
-## Status: Session 32 complete — redesign v2 Phase 1 implemented, regression testing needed
+## Status: Session 33 complete — "Why Prosochai?" modal + tooltip fixes + tauri-plugin-opener; regression testing still needed
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -14,6 +14,7 @@
 ### 4. ✅ Cowork feature: tested and working (Session 25)
 ### 5. ✅ Major redesign v1: implemented (Sessions 26–31)
 ### 6. ✅ Redesign v2 Phase 1: single-screen, edit-lock, timing/coworking in Settings — **implemented (Session 32), needs regression testing**
+### 7. ✅ Session 33: tooltip fixes + "Why Prosochai?" modal + tauri-plugin-opener for external links — **implemented**
 
 ---
 

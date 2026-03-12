@@ -355,7 +355,8 @@ export function loadCoworkSessionAsSettings(
 ): Settings {
   // Translate room timing → Settings timing fields
   const timingFields: Partial<Settings> = { startType: 'now' as const };
-  if (room.startTime !== undefined) {
+  if (room.startTime !== undefined && room.startTime > Date.now()) {
+    // Only treat as "specific" if the session hasn't started yet
     const d = new Date(room.startTime);
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');

@@ -170,11 +170,13 @@ export interface SettingsFile {
     type: 'specific';
     date: string;   // "YYYY-MM-DD"
     time: string;   // "HH:MM"
+    settings?: Settings;
   } | {
     type: 'recurring';
     days: CoworkDay[];
     time: string;   // "HH:MM"
     timezone: string;
+    settings?: Settings;
   };
 }
 

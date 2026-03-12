@@ -4,6 +4,34 @@ Reverse chronological order (most recent first).
 
 ---
 
+## Session 35 — 2026-03-12 (wmben PC — solo schedule click fix + settings snapshot storage)
+
+**What was done:**
+
+**Bug fix — solo schedule card click did nothing after loading a cowork session:**
+- Root cause: click handler did `{ ...settings, ...timingUpdates }` — when `settings` was already a cowork room load, timing-only patch didn't clear `isCoworking`, `promptSettings`, etc.
+- Fix: extended `soloSchedule` storage to include a full `Settings` snapshot at save time; click handler now restores from that snapshot
+
+**`src/lib/types.ts`:**
+- Added `settings?: Settings` to both branches of the `soloSchedule` union type in `SettingsFile`
+
+**`src/components/screens/Main.tsx`:**
+- `handleSaveRecurring`: now passes `settings: p` when calling `saveSoloSchedule`
+- Specific-date path in `handleMainAction`: now passes `settings: p` when calling `saveSoloSchedule`
+- Solo schedule card click handler: uses `soloSchedule.settings ?? modeDefaults` as base (restores saved settings; falls back to user defaults for old schedules without snapshot)
+
+**Note for testing:** existing saved solo schedules predate this fix and won't have a snapshot — delete and re-save once to get proper restoration behavior.
+
+**TypeScript:** Clean ✅
+
+**Files changed:** `src/lib/types.ts`, `src/components/screens/Main.tsx`
+
+---
+
+## Session 34 — 2026-03-12 (wmben PC — Wikipedia links in Key Terms, edit mode card headers, discard/save-default confirmations, sessions section bug fix)
+
+---
+
 ## Session 31 — 2026-03-10 (wmben PC — app rename + bug fixes + room card redesign + WhenSection headings)
 
 **What was done:**

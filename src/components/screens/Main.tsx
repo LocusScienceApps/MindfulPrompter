@@ -468,9 +468,9 @@ export default function Main({
   // ── Schedule handler ──
 
   const handleSaveRecurring = () => {
-    const tz = settings.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (!settings.startDays?.length || !settings.startTime) return;
-    saveSoloSchedule({ type: 'recurring', days: settings.startDays, time: settings.startTime, timezone: tz });
+    const tz = p.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!p.startDays?.length || !p.startTime) return;
+    saveSoloSchedule({ type: 'recurring', days: p.startDays, time: p.startTime, timezone: tz, settings: p });
     setSoloSchedule(getSoloSchedule() ?? null);
     setScheduleSaved(true);
     setTimeout(() => setScheduleSaved(false), 3000);
@@ -487,55 +487,55 @@ export default function Main({
     setHostError('');
     try {
       const timingSettings = {
-        workMinutes: settings.workMinutes,
-        breakMinutes: settings.breakMinutes,
-        sessionsPerSet: settings.sessionsPerSet,
-        multipleSets: settings.multipleSets,
-        longBreakMinutes: settings.longBreakMinutes,
-        numberOfSets: settings.numberOfSets,
-        hardBreak: settings.hardBreak ?? false,
-        playSound: settings.playSound,
+        workMinutes: p.workMinutes,
+        breakMinutes: p.breakMinutes,
+        sessionsPerSet: p.sessionsPerSet,
+        multipleSets: p.multipleSets,
+        longBreakMinutes: p.longBreakMinutes,
+        numberOfSets: p.numberOfSets,
+        hardBreak: p.hardBreak ?? false,
+        playSound: p.playSound,
       };
-      const shareP = settings.useMindfulness ? settings.sharePrompts : false;
+      const shareP = p.useMindfulness ? p.sharePrompts : false;
       const promptSettings = shareP
         ? {
-            promptText: settings.promptText,
-            promptIntervalMinutes: settings.promptIntervalMinutes,
-            dismissSeconds: settings.dismissSeconds,
-            promptCount: settings.promptCount,
-            bothMindfulnessScope: settings.bothMindfulnessScope ?? 'work-only' as const,
+            promptText: p.promptText,
+            promptIntervalMinutes: p.promptIntervalMinutes,
+            dismissSeconds: p.dismissSeconds,
+            promptCount: p.promptCount,
+            bothMindfulnessScope: p.bothMindfulnessScope ?? 'work-only' as const,
           }
         : undefined;
 
       let startMs: number | null = null;
       let input: NewRoomInput;
 
-      if (settings.startType === 'recurring' && settings.startDays?.length && settings.startTime) {
-        const tz = settings.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (p.startType === 'recurring' && p.startDays?.length && p.startTime) {
+        const tz = p.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
         const durationMinutes = computeSessionDurationMs(timingSettings) / 60000;
         input = {
           type: 'public',
-          name: hostRoomName.trim() || generateRoomName(settings),
-          mindfulnessOnly: !settings.useTimedWork,
+          name: hostRoomName.trim() || generateRoomName(p),
+          mindfulnessOnly: !p.useTimedWork,
           timingSettings,
           sharePrompts: shareP,
           promptSettings,
-          hostSettings: settings,
-          recurrenceRule: { days: settings.startDays, time: settings.startTime, timezone: tz, durationMinutes },
+          hostSettings: p,
+          recurrenceRule: { days: p.startDays, time: p.startTime, timezone: tz, durationMinutes },
         };
       } else {
-        if (settings.startType === 'specific' && specificDate && settings.startTime) {
-          const ms = new Date(`${specificDate}T${settings.startTime}`).getTime();
+        if (p.startType === 'specific' && specificDate && p.startTime) {
+          const ms = new Date(`${specificDate}T${p.startTime}`).getTime();
           if (!isNaN(ms)) startMs = ms;
         }
         input = {
           type: 'public',
-          name: hostRoomName.trim() || generateRoomName(settings),
-          mindfulnessOnly: !settings.useTimedWork,
+          name: hostRoomName.trim() || generateRoomName(p),
+          mindfulnessOnly: !p.useTimedWork,
           timingSettings,
           sharePrompts: shareP,
           promptSettings,
-          hostSettings: settings,
+          hostSettings: p,
           startTime: startMs ?? Date.now(),
         };
       }
@@ -552,22 +552,39 @@ export default function Main({
 
   const handleMainAction = async () => {
     setIntervalError('');
-    if (settings.useMindfulness && settings.useTimedWork) {
-      if (!dividesEvenly(settings.workMinutes, settings.promptIntervalMinutes)) {
+    if (p.useMindfulness && p.useTimedWork) {
+      if (!dividesEvenly(p.workMinutes, p.promptIntervalMinutes)) {
         setIntervalError(
-          `Prosochai interval (${settings.promptIntervalMinutes} min) doesn't fit into work period (${settings.workMinutes} min). Try: ${formatDivisorList(settings.workMinutes)}`
+          `Prosochai interval (${p.promptIntervalMinutes} min) doesn't fit into work period (${p.workMinutes} min). Try: ${formatDivisorList(p.workMinutes)}`
         );
         return;
       }
     }
 
-    if (settings.isCoworking && !loadedRoomCode) {
+    // Validate specific-time scheduling before doing anything
+    if (p.startType === 'specific') {
+      const ms = new Date(`${specificDate}T${p.startTime ?? ''}`).getTime();
+      if (!p.startTime || isNaN(ms)) {
+        setIntervalError('Please enter a start time before scheduling.');
+        return;
+      }
+    }
+
+    // If in edit mode, commit pending settings before acting
+    if (editMode) {
+      onSettingsChange(p);
+      setEditMode(false);
+      setShowSavePreset(false);
+    }
+
+    if (p.isCoworking && !loadedRoomCode) {
       await handleCreateAndHost();
-    } else if (settings.startType === 'now') {
+    } else if (p.startType === 'now') {
       onStart();
-    } else if (settings.startType === 'specific') {
-      const ms = new Date(`${specificDate}T${settings.startTime ?? ''}`).getTime();
-      if (isNaN(ms)) { setIntervalError('Please set a valid date and time.'); return; }
+    } else if (p.startType === 'specific') {
+      const ms = new Date(`${specificDate}T${p.startTime ?? ''}`).getTime();
+      saveSoloSchedule({ type: 'specific', date: specificDate, time: p.startTime ?? '', settings: p });
+      setSoloSchedule(getSoloSchedule() ?? null);
       onScheduledStart(ms);
     } else {
       // recurring
@@ -576,12 +593,12 @@ export default function Main({
   };
 
   const actionLabel = (() => {
-    if (settings.isCoworking && !loadedRoomCode) {
-      if (settings.startType === 'now') return 'Host Session Now';
+    if (p.isCoworking && !loadedRoomCode) {
+      if (p.startType === 'now') return 'Host Session Now';
       return 'Schedule Cowork Session';
     }
-    if (settings.startType === 'now') return 'Start Session Now';
-    if (settings.startType === 'specific') return 'Schedule Session';
+    if (p.startType === 'now') return 'Start Session Now';
+    if (p.startType === 'specific') return 'Start Countdown';
     return 'Save Schedule';
   })();
 
@@ -935,7 +952,7 @@ export default function Main({
           specificDate={specificDate}
           specificTime={isFieldLocked('startTime') ? (settings.startTime ?? '') : (p.startTime ?? '')}
           onSpecificDateChange={setSpecificDate}
-          onSpecificTimeChange={(v) => { if (!isFieldLocked('startTime')) updatePending({ startTime: v }); }}
+          onSpecificTimeChange={(v) => { if (!isFieldLocked('startTime')) { updatePending({ startTime: v }); setIntervalError(''); } }}
           recurringDays={isFieldLocked('startDays') ? (settings.startDays ?? []) : (p.startDays ?? [])}
           recurringTime={isFieldLocked('startTime') ? (settings.startTime ?? '') : (p.startTime ?? '')}
           onRecurringDaysChange={(days) => { if (!isFieldLocked('startDays')) updatePending({ startDays: days }); }}
@@ -1027,7 +1044,24 @@ export default function Main({
                 <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-indigo-100 text-indigo-700 flex-shrink-0">Solo</span>
-                    <span className="flex-1 text-sm font-semibold text-gray-700">
+                    <span
+                      className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
+                      onClick={() => {
+                        const base = soloSchedule.settings ?? modeDefaults;
+                        const updates: Partial<Settings> = {
+                          isCoworking: false,
+                          startType: soloSchedule.type,
+                          startTime: soloSchedule.time,
+                          ...(soloSchedule.type === 'recurring' ? {
+                            startDays: soloSchedule.days,
+                            startTimezone: soloSchedule.timezone,
+                          } : {}),
+                        };
+                        onSettingsChange({ ...base, ...updates });
+                        if (soloSchedule.type === 'specific') setSpecificDate(soloSchedule.date);
+                        setEditMode(false);
+                      }}
+                    >
                       {soloSchedule.type === 'specific'
                         ? `${soloSchedule.date} at ${soloSchedule.time}`
                         : `${soloSchedule.days.join(', ')} at ${soloSchedule.time}`}

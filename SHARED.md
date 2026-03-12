@@ -12,12 +12,12 @@ Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **bl
 
 ## Current Status
 
-**Phase 2 in progress.** Session 33 complete — see [TODO.md](TODO.md) for next steps.
+**Phase 2 in progress.** Session 36 complete — see [TODO.md](TODO.md) for next steps.
 
 - Phase 1 ✅ (Sessions 1–21): all features matching batch file
-- Phase 2 🔄 (Sessions 22–33): Tauri + Firebase cowork + redesign v2 Phase 1 — **needs regression testing (TODO.md A–P)**
+- Phase 2 🔄 (Sessions 22–36): Tauri + Firebase cowork + redesign v2 Phase 1 — **needs regression testing (TODO.md A–P)**
 - Redesign v2 Phase 1 ✅: single-screen design, edit-lock, timing/coworking in Settings, Sessions section, guest locked fields — all implemented
-- Session 33 ✅: tooltip fixes, "Why Prosochai?" modal + page, tauri-plugin-opener for external links
+- Session 36 ✅: Sessions section overhaul — Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting, solo card Options dropdown, startup auto-launch bug fix
 - Phase 3/4: optional accounts + paid tiers — post-traction only
 
 → Architecture decisions, distribution plan, phase details: [docs/architecture.md](docs/architecture.md)
@@ -72,6 +72,7 @@ src/
     storage.ts    ← persistence; key mindful-prompter-v3; v2 migration (wipe on detect)
     cowork.ts     ← room CRUD, host-rooms index, recurrence, buildHostSettings(), loadCoworkSessionAsSettings()
     firebase.ts   ← Firebase init, anonymous auth
+    formatLocale.ts  ← locale-aware time/date/day formatting (12h/24h, week start, sortDays)
     validation.ts, format.ts, sound.ts, registerSW.ts
 src-tauri/
   src/lib.rs     ← show_notification (async), get_notification_data, close_notification_window (async)

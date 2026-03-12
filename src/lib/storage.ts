@@ -201,30 +201,41 @@ export function deletePreset(slot: PresetSlot): void {
   saveFile(file);
 }
 
-// ── Solo Schedule ───────────────────────────────────────────────────────────
+// ── Solo Schedules ──────────────────────────────────────────────────────────
 
-/**
- * Load the saved solo session schedule.
- * Returns undefined if no schedule has been saved.
- */
-export function getSoloSchedule(): SettingsFile['soloSchedule'] {
-  return loadFile().soloSchedule;
+import type { SoloSession } from './types';
+
+/** Load all saved solo sessions, migrating legacy single-object format if needed. */
+export function getSoloSchedules(): SoloSession[] {
+  const raw = loadFile().soloSchedule;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as SoloSession[];
+  // Legacy: single object — migrate with a stable ID
+  const legacy = raw as Record<string, unknown>;
+  return [{ ...legacy, id: 'legacy' } as SoloSession];
 }
 
-/**
- * Save a solo session schedule (specific date/time or recurring weekly).
- */
-export function saveSoloSchedule(schedule: NonNullable<SettingsFile['soloSchedule']>): void {
+/** Add a new solo session (max 5). Returns the created session, or null if at cap. */
+export function addSoloSchedule(schedule: SoloSession): SoloSession | null {
   const file = loadFile();
-  file.soloSchedule = schedule;
+  const current = getSoloSchedules();
+  if (current.length >= 5) return null;
+  const newSession: SoloSession = { ...schedule, id: Date.now().toString() } as SoloSession;
+  file.soloSchedule = [...current, newSession];
+  saveFile(file);
+  return newSession;
+}
+
+/** Update an existing solo session (e.g. rename). */
+export function updateSoloSchedule(session: SoloSession): void {
+  const file = loadFile();
+  file.soloSchedule = getSoloSchedules().map((s) => s.id === session.id ? session : s);
   saveFile(file);
 }
 
-/**
- * Clear the saved solo session schedule.
- */
-export function clearSoloSchedule(): void {
+/** Delete a solo session by ID. */
+export function deleteSoloSchedule(id: string): void {
   const file = loadFile();
-  delete file.soloSchedule;
+  file.soloSchedule = getSoloSchedules().filter((s) => s.id !== id);
   saveFile(file);
 }

@@ -1,6 +1,6 @@
 # Prosochai TODO
 
-## Status: Session 33 complete — "Why Prosochai?" modal + tooltip fixes + tauri-plugin-opener; regression testing still needed
+## Status: Session 36 complete — Sessions section overhaul (Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting); regression testing still needed
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -15,6 +15,8 @@
 ### 5. ✅ Major redesign v1: implemented (Sessions 26–31)
 ### 6. ✅ Redesign v2 Phase 1: single-screen, edit-lock, timing/coworking in Settings — **implemented (Session 32), needs regression testing**
 ### 7. ✅ Session 33: tooltip fixes + "Why Prosochai?" modal + tauri-plugin-opener for external links — **implemented**
+### 8. ✅ Sessions 34–35: Wikipedia links in Key Terms, edit mode card headers, discard/save-default confirmations, solo schedule click fix + settings snapshot — **implemented**
+### 9. ✅ Session 36: Sessions section overhaul — Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting (`formatLocale.ts`), solo card Options dropdown (Rename/Delete), startup auto-launch bug fix — **implemented**
 
 ---
 
@@ -96,19 +98,24 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 - [ ] Up to 5 presets (S1–S5)
 
 ### J. Scheduled & Active Sessions section
-- [ ] Collapsed by default; hidden if no sessions and no soloSchedule
-- [ ] Shows soloSchedule card if one exists (solo recurring schedule)
-- [ ] Shows hosted cowork rooms that are active or upcoming only (no past sessions)
-- [ ] Room cards: state badge ("Live" / "Starts…") + room name + Options ▾ + Join button
-- [ ] Join button (active or ≤5 min): bright green, enabled → calls `onJoinAsHost`
-- [ ] Join button (>5 min away): grayed/disabled
-- [ ] Options ▾: "Rename", "Show code / Hide code", "Delete" (no "Change Settings")
+- [ ] Collapsed by default; hidden if no sessions
+- [ ] Two collapsible subsections: "Solo" and "Coworking"
+- [ ] **Solo subsection:** shows up to 5 solo session cards (specific-date or recurring)
+- [ ] Solo cards: timing badge on left (e.g. "Mar 14 at 4:30 PM" or "Every Mon & Tue at 09:00") + name + Options ▾
+- [ ] Solo Options ▾: "Rename", "Delete" (confirm pattern)
+- [ ] Solo rename: pre-fills current display name; Enter/Save saves; Escape cancels
+- [ ] Solo cap: scheduling a 6th shows an error, does not add
+- [ ] Clicking a solo card loads its saved settings snapshot into Main
+- [ ] **Coworking subsection:** shows hosted cowork rooms that are active or upcoming only
+- [ ] Room cards: state badge ("Live" / "Starts…" or recurrence pattern for recurring) + room name + Options ▾
+- [ ] Options ▾: "Rename", "Show code / Hide code", "Delete" (no "Change Settings", no "Join")
 - [ ] "Rename": inline Firebase updateRoom call
 - [ ] "Show code": toggles code display
 - [ ] "Delete": confirm pattern
 - [ ] Room order: Live first → Upcoming soonest → (no ended rooms shown)
-- [ ] Clicking a session card loads its settings into Main (like a preset)
-- [ ] soloSchedule card: "Cancel" → confirm → removes schedule; Sessions section hides
+- [ ] Clicking a cowork card loads its settings into Main
+- [ ] Recurring cowork badge shows "Every Mon & Wed at 09:00 ↻" (not next-occurrence date)
+- [ ] Locale-aware time formatting: 12h on 12h systems, 24h on 24h systems
 
 ### K. Coworking join (guest flow)
 - [ ] "Join a Coworking Session ▼" expands at bottom

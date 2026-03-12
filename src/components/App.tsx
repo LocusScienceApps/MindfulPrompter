@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, PresetSlot } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
-import { initStorage, getDefaults as getStoredDefaults, saveDefaults, savePreset, clearDefaults, getSoloSchedule, clearSoloSchedule } from '@/lib/storage';
+import { initStorage, getDefaults as getStoredDefaults, saveDefaults, savePreset, clearDefaults, getSoloSchedules, deleteSoloSchedule } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
 import Main from './screens/Main';
 import NotificationBanner from './ui/NotificationBanner';
@@ -52,7 +52,9 @@ export default function App() {
 
   // Solo schedule notice state
   const [upcomingSessionMs, setUpcomingSessionMs] = useState<number | null>(null);
+  const [upcomingSessionId, setUpcomingSessionId] = useState<string | null>(null);
   const [activeSessionMs, setActiveSessionMs] = useState<number | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [cancelScheduleConfirm, setCancelScheduleConfirm] = useState(false);
 
   useEffect(() => {
@@ -113,53 +115,41 @@ export default function App() {
 
     const check = () => {
       if (screenRef.current !== 'main') return;
-      const schedule = getSoloSchedule();
-      if (!schedule) {
-        setUpcomingSessionMs(null);
-        setActiveSessionMs(null);
+      const schedules = getSoloSchedules();
+      if (!schedules.length) {
+        setUpcomingSessionMs(null); setUpcomingSessionId(null);
+        setActiveSessionMs(null); setActiveSessionId(null);
         return;
       }
 
       const now = Date.now();
+      let foundActive: { ms: number; id: string } | null = null;
+      let foundUpcoming: { ms: number; id: string } | null = null;
 
-      if (schedule.type === 'specific') {
-        const targetMs = new Date(`${schedule.date}T${schedule.time}`).getTime();
-        if (isNaN(targetMs)) return;
-        const diff = targetMs - now;
-        if (diff > 0 && diff <= 5 * 60 * 1000) {
-          setUpcomingSessionMs(targetMs);
-          setActiveSessionMs(null);
-        } else if (diff <= 0 && diff > -60 * 60 * 1000) {
-          setActiveSessionMs(targetMs);
-          setUpcomingSessionMs(null);
-        } else {
-          setUpcomingSessionMs(null);
-          setActiveSessionMs(null);
-        }
-      } else if (schedule.type === 'recurring') {
-        const rule = { days: schedule.days, time: schedule.time, timezone: schedule.timezone, durationMinutes: 0 };
-        const mostRecent = computeMostRecentOccurrence(rule, now);
-        const next = computeNextOccurrence(rule, now);
-
-        if (mostRecent !== null) {
-          const elapsed = now - mostRecent;
-          if (elapsed < 60 * 60 * 1000) {
-            setActiveSessionMs(mostRecent);
-            setUpcomingSessionMs(null);
-            return;
+      for (const schedule of schedules) {
+        if (schedule.type === 'specific') {
+          const targetMs = new Date(`${schedule.date}T${schedule.time}`).getTime();
+          if (isNaN(targetMs)) continue;
+          const diff = targetMs - now;
+          if (diff <= 0 && diff > -60 * 60 * 1000) {
+            if (!foundActive) foundActive = { ms: targetMs, id: schedule.id };
+          } else if (diff > 0 && diff <= 5 * 60 * 1000) {
+            if (!foundUpcoming || targetMs < foundUpcoming.ms) foundUpcoming = { ms: targetMs, id: schedule.id };
+          }
+        } else if (schedule.type === 'recurring') {
+          const rule = { days: schedule.days, time: schedule.time, timezone: schedule.timezone, durationMinutes: 0 };
+          const mostRecent = computeMostRecentOccurrence(rule, now);
+          const next = computeNextOccurrence(rule, now);
+          if (mostRecent !== null && now - mostRecent < 60 * 60 * 1000) {
+            if (!foundActive) foundActive = { ms: mostRecent, id: schedule.id };
+          } else if (next !== null && next - now > 0 && next - now <= 5 * 60 * 1000) {
+            if (!foundUpcoming || next < foundUpcoming.ms) foundUpcoming = { ms: next, id: schedule.id };
           }
         }
-        if (next !== null) {
-          const diff = next - now;
-          if (diff > 0 && diff <= 5 * 60 * 1000) {
-            setUpcomingSessionMs(next);
-            setActiveSessionMs(null);
-            return;
-          }
-        }
-        setUpcomingSessionMs(null);
-        setActiveSessionMs(null);
       }
+
+      setActiveSessionMs(foundActive?.ms ?? null); setActiveSessionId(foundActive?.id ?? null);
+      setUpcomingSessionMs(foundUpcoming?.ms ?? null); setUpcomingSessionId(foundUpcoming?.id ?? null);
     };
 
     check();
@@ -365,10 +355,11 @@ export default function App() {
 
   // ── Solo schedule helpers ──
 
-  const handleCancelSchedule = () => {
-    clearSoloSchedule();
-    setUpcomingSessionMs(null);
-    setActiveSessionMs(null);
+  const handleCancelSchedule = (id?: string) => {
+    const targetId = id ?? upcomingSessionId ?? activeSessionId;
+    if (targetId) deleteSoloSchedule(targetId);
+    setUpcomingSessionMs(null); setUpcomingSessionId(null);
+    setActiveSessionMs(null); setActiveSessionId(null);
     setCancelScheduleConfirm(false);
   };
 
@@ -444,7 +435,7 @@ export default function App() {
                 <p className="text-xs text-indigo-800">Are you sure? This will delete your saved schedule.</p>
                 <div className="flex gap-2">
                   <button
-                    onClick={handleCancelSchedule}
+                    onClick={() => handleCancelSchedule()}
                     className="text-xs font-medium text-red-600 hover:text-red-800"
                   >
                     Yes, cancel it
@@ -503,7 +494,7 @@ export default function App() {
               onHostStart={handleHostStart}
               onJoinAsHost={handleJoinAsHost}
               onCoworkGuestStart={handleCoworkGuestStart}
-              onClearSoloSchedule={handleCancelSchedule}
+              onDeleteSoloSchedule={handleCancelSchedule}
               isAtDefaults={isAtDefaults}
               onLoadDefaults={handleLoadDefaults}
               loadedRoomCode={loadedRoomCode}
@@ -517,7 +508,7 @@ export default function App() {
             onStart={coworkRoomCode
               ? () => { setSessionStats(null); setScreen('timer'); }
               : handleBeginSession}
-            onBack={() => setScreen('main')}
+            onBack={() => { localStorage.removeItem(COWORK_SESSION_KEY); setCoworkRoomCode(null); setCoworkStartTime(null); setIsCoworkHost(false); setScreen('main'); }}
           />
         )}
 

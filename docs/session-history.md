@@ -4,6 +4,43 @@ Reverse chronological order (most recent first).
 
 ---
 
+## Session 36 — 2026-03-12 (wmben PC — Sessions section overhaul: Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting)
+
+**What was done:**
+
+**Sessions section UI overhaul:**
+- Restructured "Scheduled & Active Sessions" into two collapsible subsections: "Solo" and "Coworking"
+- Removed "Join" buttons from coworking session cards (reserved for future bottom-of-screen join panel)
+- Replaced solo "Cancel schedule" button with Options dropdown (Rename + Delete) matching coworking style
+- Solo card badge now shows timing on left, matching coworking card layout (e.g. "Mar 14 at 4:30 PM")
+- Recurring cowork badge now shows recurrence pattern ("Every Mon & Wed at 09:00 ↻") instead of next-occurrence date
+
+**Solo sessions: single slot → up to 5 (matching coworking cap):**
+- New `SoloSession` discriminated union type with `id: string` (and optional `name`, `settings` snapshot)
+- New storage functions: `getSoloSchedules()` (array, migrates legacy), `addSoloSchedule()`, `updateSoloSchedule()`, `deleteSoloSchedule()`
+- App.tsx: polling iterates all sessions, tracks `upcomingSessionId` / `activeSessionId`
+- Main.tsx: `soloSchedules: SoloSession[]` state; all UI renders list of cards
+
+**`src/lib/formatLocale.ts` (new file):**
+- `locale12h()`: detects 12h vs 24h by formatting a known 13:00 time with `undefined` locale (respects Windows regional settings, not just display language)
+- `sortDays(days)`: locale-aware week start via `Intl.Locale.weekInfo`
+- `formatTime(hhmm)`: "16:30" → "16:30" or "4:30 PM"
+- `formatDate(date, time)`: "Mar 14 at 4:30 PM"
+- `formatTimestamp(ms)`: "Today at 4:30 PM" or "Mar 14 at 4:30 PM"
+- `formatRecurring(days, time)`: "Every Mon & Tue at 09:00"
+
+**Bug fixes:**
+- Startup auto-launch into countdown: `onBack` on ScheduledStart wasn't clearing `COWORK_SESSION_KEY`; fixed to remove key and reset cowork state
+- Solo rename pre-fill was blank: now shows current display name (formatDate/formatRecurring fallback)
+- "When" section showing only time for specific-date sessions: now shows full date+time
+- Wrong date in "When" when clicking cowork session card: now extracts date from `timing.startMs`
+
+**TypeScript:** Clean ✅
+
+**Files changed:** `src/lib/types.ts`, `src/lib/storage.ts`, `src/lib/formatLocale.ts` (new), `src/components/App.tsx`, `src/components/screens/Main.tsx`
+
+---
+
 ## Session 35 — 2026-03-12 (wmben PC — solo schedule click fix + settings snapshot storage)
 
 **What was done:**

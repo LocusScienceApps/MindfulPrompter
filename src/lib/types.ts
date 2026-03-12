@@ -162,22 +162,28 @@ export interface Preset {
   settings: Settings;
 }
 
+/** A saved solo session schedule entry */
+export type SoloSession = {
+  id: string;
+  name?: string;
+  settings?: Settings;
+} & ({
+  type: 'specific';
+  date: string;   // "YYYY-MM-DD"
+  time: string;   // "HH:MM"
+} | {
+  type: 'recurring';
+  days: CoworkDay[];
+  time: string;   // "HH:MM"
+  timezone: string;
+});
+
 /** The full persisted settings file structure */
 export interface SettingsFile {
   defaults?: Partial<Settings>;
   presets: Partial<Record<PresetSlot, Preset>>;
-  soloSchedule?: {
-    type: 'specific';
-    date: string;   // "YYYY-MM-DD"
-    time: string;   // "HH:MM"
-    settings?: Settings;
-  } | {
-    type: 'recurring';
-    days: CoworkDay[];
-    time: string;   // "HH:MM"
-    timezone: string;
-    settings?: Settings;
-  };
+  /** Array of saved solo sessions (max 5). Legacy: may be a single object — migrated on read. */
+  soloSchedule?: SoloSession[] | Record<string, unknown>;
 }
 
 /** Stats accumulated during a timer session */

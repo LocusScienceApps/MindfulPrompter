@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { openExternal } from '@/lib/tauri';
-import type { Settings, PresetSlot, CoworkRoom, GuestContentMode, CoworkDay, MindfulnessScope } from '@/lib/types';
+import type { Settings, PresetSlot, CoworkRoom, GuestContentMode, CoworkDay, MindfulnessScope, SoloSession } from '@/lib/types';
+import { formatTime, formatDate, formatTimestamp, formatRecurring } from '@/lib/formatLocale';
 import {
   listPresets, renamePreset, deletePreset,
-  saveSoloSchedule, getSoloSchedule,
+  getSoloSchedules, addSoloSchedule, updateSoloSchedule, deleteSoloSchedule,
   getDefaults as getStoredDefaults,
 } from '@/lib/storage';
 import {
@@ -192,15 +193,11 @@ function getRoomSortKey(room: CoworkRoom): { group: 0 | 1 | 2; sortMs: number } 
 function formatRoomBadge(room: CoworkRoom): { label: string; colorClass: string } {
   const timing = computeRoomTiming(room);
   if (timing?.isActive) return { label: 'Live', colorClass: 'bg-emerald-100 text-emerald-700' };
-  const formatTime = (ms: number) => {
-    const d = new Date(ms);
-    const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    if (d.toDateString() === new Date().toDateString()) return `today at ${hhmm}`;
-    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${hhmm}`;
-  };
   if (timing?.isFuture || timing?.nextStartMs) {
-    const ms = timing?.nextStartMs ?? timing?.startMs ?? 0;
-    return { label: `Starts ${formatTime(ms)}`, colorClass: 'bg-indigo-100 text-indigo-700' };
+    const label = room.recurrenceRule
+      ? formatRecurring(room.recurrenceRule.days, room.recurrenceRule.time) + ' ↻'
+      : formatTimestamp(timing?.startMs ?? 0);
+    return { label, colorClass: 'bg-indigo-100 text-indigo-700' };
   }
   return { label: 'Ended', colorClass: 'bg-gray-100 text-gray-500' };
 }
@@ -226,7 +223,7 @@ interface MainProps {
   onHostStart: (input: NewRoomInput, startMs: number | null) => Promise<void>;
   onJoinAsHost: (room: CoworkRoom, startMs: number) => void;
   onCoworkGuestStart: (room: CoworkRoom, mode: GuestContentMode, startMs: number) => void;
-  onClearSoloSchedule: () => void;
+  onDeleteSoloSchedule: (id: string) => void;
   isAtDefaults: boolean;
   onLoadDefaults: () => void;
   loadedRoomCode: string | null;
@@ -248,7 +245,7 @@ export default function Main({
   onHostStart,
   onJoinAsHost,
   onCoworkGuestStart,
-  onClearSoloSchedule,
+  onDeleteSoloSchedule,
   isAtDefaults,
   onLoadDefaults,
   loadedRoomCode,
@@ -294,14 +291,20 @@ export default function Main({
   const [hostedRooms, setHostedRooms] = useState<CoworkRoom[]>([]);
   const [hostedRoomsLoaded, setHostedRoomsLoaded] = useState(false);
   const [expandSessions, setExpandSessions] = useState(false);
+  const [expandSolo, setExpandSolo] = useState(true);
+  const [expandCowork, setExpandCowork] = useState(true);
   const [openDropdownRoom, setOpenDropdownRoom] = useState<string | null>(null);
   const [showRoomCodes, setShowRoomCodes] = useState<Record<string, boolean>>({});
   const [deletingRoom, setDeletingRoom] = useState<string | null>(null);
   const [renamingRoomCode, setRenamingRoomCode] = useState<string | null>(null);
   const [renameRoomValue, setRenameRoomValue] = useState('');
   const [copiedRoomCode, setCopiedRoomCode] = useState<string | null>(null);
-  const [soloSchedule, setSoloSchedule] = useState<ReturnType<typeof getSoloSchedule> | null>(() => getSoloSchedule() ?? null);
-  const [cancelScheduleConfirm, setCancelScheduleConfirm] = useState(false);
+  const [soloSchedules, setSoloSchedules] = useState<SoloSession[]>(() => getSoloSchedules());
+  const [soloScheduleError, setSoloScheduleError] = useState('');
+  const [openDropdownSolo, setOpenDropdownSolo] = useState<string | null>(null);
+  const [renamingSolo, setRenamingSolo] = useState<string | null>(null);
+  const [renameSoloValue, setRenameSoloValue] = useState('');
+  const [deletingSolo, setDeletingSolo] = useState<string | null>(null);
 
   // ── Cowork / host creation ──
   const [hostRoomName, setHostRoomName] = useState('');
@@ -351,16 +354,17 @@ export default function Main({
   }, []);
 
   useEffect(() => {
-    if (openDropdownPreset === null && openDropdownRoom === null) return;
+    if (openDropdownPreset === null && openDropdownRoom === null && !openDropdownSolo) return;
     const handler = (e: MouseEvent) => {
       if (!(e.target as HTMLElement).closest('[data-dropdown]')) {
         setOpenDropdownPreset(null);
         setOpenDropdownRoom(null);
+        setOpenDropdownSolo(null);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [openDropdownPreset, openDropdownRoom]);
+  }, [openDropdownPreset, openDropdownRoom, openDropdownSolo]);
 
   // ── Edit mode toggle ──
 
@@ -430,6 +434,16 @@ export default function Main({
     setRenamingRoomCode(null);
   };
 
+  const handleRenameSolo = (id: string) => {
+    const trimmed = renameSoloValue.trim();
+    const session = soloSchedules.find((s) => s.id === id);
+    if (session) {
+      updateSoloSchedule({ ...session, name: trimmed || undefined });
+      setSoloSchedules(getSoloSchedules());
+    }
+    setRenamingSolo(null);
+  };
+
   // ── Join handlers ──
 
   const handleLoadSession = async () => {
@@ -470,8 +484,10 @@ export default function Main({
   const handleSaveRecurring = () => {
     const tz = p.startTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!p.startDays?.length || !p.startTime) return;
-    saveSoloSchedule({ type: 'recurring', days: p.startDays, time: p.startTime, timezone: tz, settings: p });
-    setSoloSchedule(getSoloSchedule() ?? null);
+    const result = addSoloSchedule({ id: '', type: 'recurring', days: p.startDays, time: p.startTime, timezone: tz, settings: p });
+    if (!result) { setSoloScheduleError('You already have 5 solo sessions. Delete one first.'); return; }
+    setSoloSchedules(getSoloSchedules());
+    setSoloScheduleError('');
     setScheduleSaved(true);
     setTimeout(() => setScheduleSaved(false), 3000);
   };
@@ -583,8 +599,10 @@ export default function Main({
       onStart();
     } else if (p.startType === 'specific') {
       const ms = new Date(`${specificDate}T${p.startTime ?? ''}`).getTime();
-      saveSoloSchedule({ type: 'specific', date: specificDate, time: p.startTime ?? '', settings: p });
-      setSoloSchedule(getSoloSchedule() ?? null);
+      const result = addSoloSchedule({ id: '', type: 'specific', date: specificDate, time: p.startTime ?? '', settings: p });
+      if (!result) { setSoloScheduleError('You already have 5 solo sessions. Delete one first.'); return; }
+      setSoloSchedules(getSoloSchedules());
+      setSoloScheduleError('');
       onScheduledStart(ms);
     } else {
       // recurring
@@ -641,7 +659,7 @@ export default function Main({
       return ka.sortMs - kb.sortMs;
     });
 
-  const hasActiveSessions = sortedRooms.length > 0 || !!soloSchedule;
+  const hasActiveSessions = sortedRooms.length > 0 || soloSchedules.length > 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -936,12 +954,12 @@ export default function Main({
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-1">When</h3>
           <p className="text-sm text-gray-600">
-            {settings.startType === 'now' && 'Start session immediately'}
+            {settings.startType === 'now' && 'Immediately'}
             {settings.startType === 'specific' && settings.startTime
-              ? `Scheduled at ${settings.startTime}`
-              : settings.startType === 'specific' ? 'Scheduled (no time set)' : null}
+              ? formatDate(specificDate, settings.startTime)
+              : settings.startType === 'specific' ? 'No time set' : null}
             {settings.startType === 'recurring' && settings.startDays?.length && settings.startTime
-              ? `Recurring: ${settings.startDays.join(', ')} at ${settings.startTime}`
+              ? formatRecurring(settings.startDays as CoworkDay[], settings.startTime)
               : settings.startType === 'recurring' ? 'Recurring (configure in edit mode)' : null}
           </p>
         </div>
@@ -1035,174 +1053,231 @@ export default function Main({
             onClick={() => setExpandSessions((v) => !v)}
             className="w-full flex items-center justify-between text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
           >
-            <span>{expandSessions ? '−' : '+'} Scheduled &amp; active sessions ({sortedRooms.length + (soloSchedule ? 1 : 0)})</span>
+            <span>{expandSessions ? '−' : '+'} Scheduled &amp; active sessions ({sortedRooms.length + soloSchedules.length})</span>
           </button>
           {expandSessions && (
-            <div className="mt-3 space-y-2">
-              {/* Solo schedule card */}
-              {soloSchedule && (
-                <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-indigo-100 text-indigo-700 flex-shrink-0">Solo</span>
-                    <span
-                      className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
-                      onClick={() => {
-                        const base = soloSchedule.settings ?? modeDefaults;
-                        const updates: Partial<Settings> = {
-                          isCoworking: false,
-                          startType: soloSchedule.type,
-                          startTime: soloSchedule.time,
-                          ...(soloSchedule.type === 'recurring' ? {
-                            startDays: soloSchedule.days,
-                            startTimezone: soloSchedule.timezone,
-                          } : {}),
-                        };
-                        onSettingsChange({ ...base, ...updates });
-                        if (soloSchedule.type === 'specific') setSpecificDate(soloSchedule.date);
-                        setEditMode(false);
-                      }}
-                    >
-                      {soloSchedule.type === 'specific'
-                        ? `${soloSchedule.date} at ${soloSchedule.time}`
-                        : `${soloSchedule.days.join(', ')} at ${soloSchedule.time}`}
-                      {soloSchedule.type === 'recurring' && (
-                        <span title="Recurring" className="ml-1 text-xs text-gray-400">↻</span>
+            <div className="mt-3 space-y-3">
+
+              {/* ── Solo subsection ── */}
+              {soloSchedules.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandSolo((v) => !v)}
+                    className="w-full flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition-colors mb-2"
+                  >
+                    {expandSolo ? '−' : '+'} Solo
+                  </button>
+                  {expandSolo && (
+                    <div className="space-y-2">
+                      {soloScheduleError && (
+                        <p className="text-xs text-red-600">{soloScheduleError}</p>
                       )}
-                    </span>
-                  </div>
-                  {cancelScheduleConfirm ? (
-                    <div className="flex gap-2 items-center flex-wrap">
-                      <span className="text-xs text-red-700">Delete this schedule?</span>
-                      <button
-                        onClick={() => { onClearSoloSchedule(); setSoloSchedule(null); setCancelScheduleConfirm(false); }}
-                        className="text-xs font-medium text-red-600 hover:text-red-800"
-                      >
-                        Yes, delete
-                      </button>
-                      <button onClick={() => setCancelScheduleConfirm(false)} className="text-xs text-gray-400 hover:text-gray-600">
-                        Never mind
-                      </button>
+                      {soloSchedules.map((soloSchedule) => (
+                        <div key={soloSchedule.id} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
+                          {renamingSolo === soloSchedule.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={renameSoloValue}
+                                onChange={(e) => setRenameSoloValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSolo(soloSchedule.id); if (e.key === 'Escape') setRenamingSolo(null); }}
+                                autoFocus
+                                className="flex-1 rounded border border-emerald-300 px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                              />
+                              <button onClick={() => handleRenameSolo(soloSchedule.id)} className="text-xs font-medium text-emerald-600 hover:text-emerald-800">Save</button>
+                              <button onClick={() => setRenamingSolo(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className="text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 bg-indigo-100 text-indigo-700 cursor-pointer hover:bg-indigo-200"
+                                onClick={() => {
+                                  const base = soloSchedule.settings ?? modeDefaults;
+                                  const updates: Partial<Settings> = {
+                                    isCoworking: false,
+                                    startType: soloSchedule.type,
+                                    startTime: soloSchedule.time,
+                                    ...(soloSchedule.type === 'recurring' ? {
+                                      startDays: soloSchedule.days,
+                                      startTimezone: soloSchedule.timezone,
+                                    } : {}),
+                                  };
+                                  onSettingsChange({ ...base, ...updates });
+                                  if (soloSchedule.type === 'specific') setSpecificDate(soloSchedule.date);
+                                  setEditMode(false);
+                                }}
+                              >
+                                {soloSchedule.type === 'specific'
+                                  ? formatDate(soloSchedule.date, soloSchedule.time)
+                                  : formatRecurring(soloSchedule.days, soloSchedule.time) + ' ↻'}
+                              </span>
+                              {soloSchedule.name && (
+                                <span className="flex-1 text-sm font-semibold text-indigo-600 min-w-0 truncate">
+                                  {soloSchedule.name}
+                                </span>
+                              )}
+                              <div className="relative" data-dropdown>
+                                <button
+                                  onClick={() => setOpenDropdownSolo(openDropdownSolo === soloSchedule.id ? null : soloSchedule.id)}
+                                  className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
+                                >
+                                  Options ▾
+                                </button>
+                                {openDropdownSolo === soloSchedule.id && (
+                                  <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                                    <button
+                                      onClick={() => { setOpenDropdownSolo(null); setRenameSoloValue(soloSchedule.name ?? (soloSchedule.type === 'specific' ? formatDate(soloSchedule.date, soloSchedule.time) : formatRecurring(soloSchedule.days, soloSchedule.time))); setRenamingSolo(soloSchedule.id); }}
+                                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                    >
+                                      Rename
+                                    </button>
+                                    <button
+                                      onClick={() => { setOpenDropdownSolo(null); setDeletingSolo(soloSchedule.id); }}
+                                      className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {deletingSolo === soloSchedule.id && (
+                            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                              <p className="text-xs text-red-800">Delete this schedule permanently?</p>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => setDeletingSolo(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                                <button onClick={() => { onDeleteSoloSchedule(soloSchedule.id); deleteSoloSchedule(soloSchedule.id); setSoloSchedules(getSoloSchedules()); setDeletingSolo(null); }} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => setCancelScheduleConfirm(true)}
-                      className="text-xs text-gray-400 hover:text-red-600 underline"
-                    >
-                      Cancel schedule
-                    </button>
                   )}
                 </div>
               )}
 
-              {/* Hosted room cards */}
-              {sortedRooms.map((room) => {
-                const timing = computeRoomTiming(room);
-                const badge = formatRoomBadge(room);
-                const isActive = timing?.isActive ?? false;
-                const now = Date.now();
-                const FIVE_MIN_MS = 5 * 60 * 1000;
-                const futureStartMs = timing?.nextStartMs ?? timing?.startMs ?? 0;
-                const isSoon = !isActive && (timing?.isFuture || !!timing?.nextStartMs) && (futureStartMs - now <= FIVE_MIN_MS);
-                const joinable = isActive || isSoon;
-                const joinStartMs = isActive ? (timing?.startMs ?? Date.now()) : futureStartMs;
-                const joinTooltip = !joinable ? 'You can join 5 minutes before it starts' : undefined;
+              {/* ── Coworking Sessions subsection ── */}
+              {sortedRooms.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandCowork((v) => !v)}
+                    className="w-full flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition-colors mb-2"
+                  >
+                    {expandCowork ? '−' : '+'} Coworking
+                  </button>
+                  {expandCowork && (
+                    <div className="space-y-2">
+                      {sortedRooms.map((room) => {
+                        const timing = computeRoomTiming(room);
+                        const badge = formatRoomBadge(room);
+                        const isActive = timing?.isActive ?? false;
+                        const now = Date.now();
+                        const FIVE_MIN_MS = 5 * 60 * 1000;
+                        const futureStartMs = timing?.nextStartMs ?? timing?.startMs ?? 0;
+                        const isSoon = !isActive && (timing?.isFuture || !!timing?.nextStartMs) && (futureStartMs - now <= FIVE_MIN_MS);
+                        const joinable = isActive || isSoon;
+                        const joinStartMs = isActive ? (timing?.startMs ?? Date.now()) : futureStartMs;
+                        const joinTooltip = !joinable ? 'You can join 5 minutes before it starts' : undefined;
 
-                return (
-                  <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
-                    {renamingRoomCode === room.code ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={renameRoomValue}
-                          onChange={(e) => setRenameRoomValue(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameRoom(room.code); if (e.key === 'Escape') setRenamingRoomCode(null); }}
-                          autoFocus
-                          className="flex-1 rounded border border-emerald-300 px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
-                        />
-                        <button onClick={() => handleRenameRoom(room.code)} className="text-xs font-medium text-emerald-600 hover:text-emerald-800">Save</button>
-                        <button onClick={() => setRenamingRoomCode(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
-                          <span
-                            className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
-                            onClick={() => { onLoadSession(room); setExpandSessions(true); }}
-                          >
-                            {room.name ?? room.code}
-                            {room.recurrenceRule && (
-                              <span title="Recurring" className="ml-1 text-xs text-gray-400">↻</span>
+                        return (
+                          <div key={room.code} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 space-y-2">
+                            {renamingRoomCode === room.code ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={renameRoomValue}
+                                  onChange={(e) => setRenameRoomValue(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') handleRenameRoom(room.code); if (e.key === 'Escape') setRenamingRoomCode(null); }}
+                                  autoFocus
+                                  className="flex-1 rounded border border-emerald-300 px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                                />
+                                <button onClick={() => handleRenameRoom(room.code)} className="text-xs font-medium text-emerald-600 hover:text-emerald-800">Save</button>
+                                <button onClick={() => setRenamingRoomCode(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${badge.colorClass}`}>{badge.label}</span>
+                                <span
+                                  className="flex-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer min-w-0"
+                                  onClick={() => {
+                                    onLoadSession(room);
+                                    setExpandSessions(true);
+                                    if (!room.recurrenceRule && timing?.startMs) {
+                                      const d = new Date(timing.startMs);
+                                      setSpecificDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+                                    }
+                                  }}
+                                >
+                                  {room.name ?? room.code}
+                                </span>
+                                <div className="relative" data-dropdown>
+                                  <button
+                                    onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
+                                    className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
+                                  >
+                                    Options ▾
+                                  </button>
+                                  {openDropdownRoom === room.code && (
+                                    <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                                      <button
+                                        onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
+                                        className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                      >
+                                        Rename
+                                      </button>
+                                      <button
+                                        onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
+                                        className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                      >
+                                        {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
+                                      </button>
+                                      <button
+                                        onClick={() => { setOpenDropdownRoom(null); setDeletingRoom(room.code); }}
+                                        className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             )}
-                          </span>
-                          <div className="relative" data-dropdown>
-                            <button
-                              onClick={() => setOpenDropdownRoom(openDropdownRoom === room.code ? null : room.code)}
-                              className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white hover:bg-gray-50"
-                            >
-                              Options ▾
-                            </button>
-                            {openDropdownRoom === room.code && (
-                              <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                            {deletingRoom === room.code && (
+                              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
+                                <p className="text-xs text-red-800">Delete this session permanently?</p>
+                                <div className="flex gap-2 shrink-0">
+                                  <button onClick={() => setDeletingRoom(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                                  <button onClick={() => handleDeleteRoom(room.code)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm</button>
+                                </div>
+                              </div>
+                            )}
+                            {showRoomCodes[room.code] && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-lg font-bold tracking-widest text-emerald-700">{room.code}</span>
                                 <button
-                                  onClick={() => { setOpenDropdownRoom(null); setRenamingRoomCode(room.code); setRenameRoomValue(room.name ?? ''); }}
-                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(room.code);
+                                    setCopiedRoomCode(room.code);
+                                    setTimeout(() => setCopiedRoomCode(null), 2000);
+                                  }}
+                                  className="text-xs text-gray-400 hover:text-emerald-600"
                                 >
-                                  Rename
-                                </button>
-                                <button
-                                  onClick={() => { setOpenDropdownRoom(null); setShowRoomCodes((prev) => ({ ...prev, [room.code]: !prev[room.code] })); }}
-                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                                >
-                                  {showRoomCodes[room.code] ? 'Hide code' : 'Show code'}
-                                </button>
-                                <button
-                                  onClick={() => { setOpenDropdownRoom(null); setDeletingRoom(room.code); }}
-                                  className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
-                                >
-                                  Delete
+                                  {copiedRoomCode === room.code ? 'Copied!' : 'Copy'}
                                 </button>
                               </div>
                             )}
                           </div>
-                        </div>
-                        <button
-                          disabled={!joinable}
-                          onClick={joinable ? () => onJoinAsHost(room, joinStartMs) : undefined}
-                          title={joinTooltip}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Join
-                        </button>
-                      </div>
-                    )}
-                    {deletingRoom === room.code && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center justify-between gap-3">
-                        <p className="text-xs text-red-800">Delete this session permanently?</p>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => setDeletingRoom(null)} className="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
-                          <button onClick={() => handleDeleteRoom(room.code)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Confirm</button>
-                        </div>
-                      </div>
-                    )}
-                    {showRoomCodes[room.code] && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-lg font-bold tracking-widest text-emerald-700">{room.code}</span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(room.code);
-                            setCopiedRoomCode(room.code);
-                            setTimeout(() => setCopiedRoomCode(null), 2000);
-                          }}
-                          className="text-xs text-gray-400 hover:text-emerald-600"
-                        >
-                          {copiedRoomCode === room.code ? 'Copied!' : 'Copy'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           )}
         </div>

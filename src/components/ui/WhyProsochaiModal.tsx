@@ -36,10 +36,13 @@ export default function WhyProsochaiModal({ onClose }: Props) {
         <div className="px-6 py-6 space-y-6 text-[1.0rem] leading-relaxed text-gray-700">
 
           <p>
-            I built Prosochai because I kept failing in two directions.
+            I built Prosochai because I have a hard time managing my attention in two distinct ways.
           </p>
           <p>
-            Sometimes I would drift. I would sit down to do one important thing and twenty minutes later find myself deep in email, tweaking a document that didn't matter, or following a thread that felt productive but was really avoidance. Other times I would lock in too hard — hours disappearing into work that felt urgent when I started but wasn't, and I would surface later realizing I had missed the thing that actually mattered.
+            Sometimes I get so absorbed in work that hours pass without me noticing. The work matters — but I lose track of time completely, and I miss what's happening around me. A doorbell. An upcoming meeting.
+          </p>
+          <p>
+            At other times, I fail to get into the work in the first place. I sit down to do something important and two hours later I still haven't started. Instead I'm reading the news or writing emails that didn't need to be written.
           </p>
           <p>
             I have a PhD in psychology and human development with a focus on behavioral decision making. I've done two ten-day silent Vipassana retreats. I <em>know</em> a lot about the value of mindfulness and intentionality. I also know that knowing isn't enough.
@@ -48,7 +51,7 @@ export default function WhyProsochaiModal({ onClose }: Props) {
             What I needed was simple: something that would interrupt me at regular intervals and ask, <em>Is this still what you mean to be doing?</em> Just a question. Not with judgment or guilt, but not so briefly that I could brush it aside and slip back into what I did not consciously want to be doing.
           </p>
           <p>
-            So I built it for myself: scheduled prompts that appear at intervals I choose and make me stop, read, and reflect before continuing. That is the heart of Prosochai.
+            So I built it for myself: scheduled prompts that appear at intervals I choose and make me stop and reflect before continuing. That is the heart of Prosochai.
           </p>
           <p>
             There is also a Pomodoro timer in the app. It is there because time-boxed work sessions often help for the same reason the prompts help: they give attention some structure. You can use either one by itself, or combine them, with the app fitting the prompts into the rhythm of work sessions and breaks.
@@ -58,7 +61,7 @@ export default function WhyProsochaiModal({ onClose }: Props) {
 
           <H2>Why this name</H2>
           <p>
-            <em>Prosoche</em> (προσοχή) is an ancient Greek word: the Stoic practice of self-attention. Not just concentration, but the ongoing effort to notice what you are doing, what is pulling you, and whether your actions still match your values. Pierre Hadot, the French historian of ancient philosophy, helped many modern readers see that Stoic ideas like this were not just theories but lived practices. Marcus Aurelius returned to the same point constantly: come back to the present task, come back to what matters.
+            <em>Prosoche</em> (προσοχή) is an ancient Greek word: the Stoic practice of self-attention. Not just concentration, but the ongoing effort to notice what you are doing, what is pulling you, and whether your actions still match your values.
           </p>
           <p>
             I didn't call the app <em>Prosoche</em>, the singular, because the app works through repeated, small prompts that bring you back again and again. <em>Prosochai</em>, the plural, felt right for that rhythm: not a single act of attention, but a practice renewed many times a day. Pronounced <em>pro-so-KAI</em>.

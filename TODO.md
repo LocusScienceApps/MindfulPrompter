@@ -160,7 +160,13 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 
 ---
 
-## 9. ⏳ Settings storage: `localStorage` → Tauri AppData — NEXT after tests pass
+## 9. ⏳ Known bug: "Save options" bar doesn't appear for all edit mode changes
+
+The "Save options" bar (including "As default") only appears when `isDirty` — i.e. when `pendingSettings` differs from `settings`. But some changes (e.g. toggling Pomodoros or Prosochai on/off in certain states) may not reliably trigger this. The user currently has to change the "When does this session start?" field to get the bar to appear. To be addressed as part of a planned overhaul of the save/start button organization.
+
+---
+
+## 10. ⏳ Settings storage: `localStorage` → Tauri AppData — NEXT after tests pass
 
 Once regression tests pass:
 - Migrate `mindful-prompter-v3` key from localStorage to Tauri file system API
@@ -168,7 +174,7 @@ Once regression tests pass:
 
 ---
 
-## 10. Distribution prep (before public launch)
+## 11. Distribution prep (before public launch)
 - Build unsigned installer — share with tech-adjacent testers
 - Decide: Microsoft Store submission (free signing) vs. paid OV certificate (~$300–500/yr)
 - Set up GitHub Actions for Mac builds (required — cannot build Mac on Windows)

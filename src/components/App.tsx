@@ -9,6 +9,7 @@ import Main from './screens/Main';
 import NotificationBanner from './ui/NotificationBanner';
 import HelpModal from './ui/HelpModal';
 import WhyProsochaiModal from './ui/WhyProsochaiModal';
+import SettingsModal from './ui/SettingsModal';
 import ScheduledStart from './screens/ScheduledStart';
 import Timer from './screens/Timer';
 import SessionComplete from './screens/SessionComplete';
@@ -45,6 +46,9 @@ export default function App() {
   const [isCoworkHost, setIsCoworkHost] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
+  const [forceRestore, setForceRestore] = useState(0);
 
   // Code of the currently-loaded cowork session on Main (distinct from coworkRoomCode
   // which tracks the active timer session). Used for "Save changes to session" logic.
@@ -206,6 +210,10 @@ export default function App() {
   const isAtDefaults =
     JSON.stringify({ ...settings, lockedFields: undefined }) ===
     JSON.stringify({ ...getInitialSettings(), lockedFields: undefined });
+
+  const isAtSoftwareDefaults =
+    JSON.stringify({ ...getInitialSettings(), lockedFields: undefined }) ===
+    JSON.stringify({ ...getDefaults(), lockedFields: undefined });
 
   // ── Preset / session loading ──
 
@@ -386,6 +394,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       {showWhy && <WhyProsochaiModal onClose={() => setShowWhy(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onResetToOriginal={handleResetToOriginal} isAtSoftwareDefaults={isAtSoftwareDefaults} />}
       <div className="mx-auto max-w-2xl px-4 py-8">
         {/* Top bar */}
         <div className="mb-5 flex items-center justify-between">
@@ -397,6 +406,13 @@ export default function App() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/images/logo.png" alt="" className="h-5 w-auto shrink-0" />
               <span>Prosochai</span>
+            </button>
+          ) : (!isAtDefaults || editDirty) ? (
+            <button
+              onClick={() => { handleLoadDefaults(); setForceRestore(k => k + 1); }}
+              className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors underline"
+            >
+              Restore my defaults
             </button>
           ) : (
             <div />
@@ -413,6 +429,13 @@ export default function App() {
               className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
             >
               Help / FAQ
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              aria-label="Settings"
+              className="text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              ⚙
             </button>
           </div>
         </div>
@@ -497,6 +520,8 @@ export default function App() {
               onDeleteSoloSchedule={handleCancelSchedule}
               isAtDefaults={isAtDefaults}
               onLoadDefaults={handleLoadDefaults}
+              onDirtyStateChange={setEditDirty}
+              forceRestore={forceRestore}
               loadedRoomCode={loadedRoomCode}
             />
           </>

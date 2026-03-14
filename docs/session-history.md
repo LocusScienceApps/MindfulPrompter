@@ -4,6 +4,32 @@ Reverse chronological order (most recent first).
 
 ---
 
+## Session 37 — 2026-03-14 (wmben PC — UI fixes, Settings modal, Why Prosochai text revisions)
+
+**What was done:**
+
+**Bug fixes:**
+- Prompt interval minimum lowered to 0.015 (≈1 second) for work period, break, long break, and Prosochai interval fields
+- Sound toggle now routes through `updatePending` in edit mode (previously wrote directly to settings, bypassing pending system — changes persisted even after discarding edit mode)
+- Toggling Pomodoros off in edit mode now correctly resets Prosochai interval to saved standalone default (previously left it at half the work period)
+- "Restore my defaults" buttons (top bar + bottom of page) now appear whenever there are unsaved edits in edit mode, not just when applied settings differ from defaults
+- Fixed "Cannot access 'isDirty' before initialization" error caused by useEffect referencing isDirty before its declaration
+
+**Settings gear icon + modal:**
+- New ⚙ button in top bar (right of Help / FAQ) opens a Settings modal
+- Settings modal contains "Restore software defaults" with confirmation step
+- Link is grayed out with tooltip if settings are already at software defaults
+- Removed old "Reset to original defaults" link from edit mode (moved into Settings modal)
+
+**Why Prosochai text revisions:**
+- Rewrote opening paragraphs (both modal and standalone page): new phrasing about managing attention in two ways, removed Pierre Hadot/Marcus Aurelius passage, updated examples
+- Minor wording tweaks throughout ("read, and reflect" → "and reflect"; "did not need to get written" → "didn't need to be written")
+
+**Known bug noted in TODO.md:**
+- "Save options" bar doesn't appear for all edit mode changes (only reliable trigger is changing the timing field); to be fixed in planned save/start button overhaul
+
+---
+
 ## Session 36 — 2026-03-12 (wmben PC — Sessions section overhaul: Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting)
 
 **What was done:**

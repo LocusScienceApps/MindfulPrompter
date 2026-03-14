@@ -226,6 +226,8 @@ interface MainProps {
   onDeleteSoloSchedule: (id: string) => void;
   isAtDefaults: boolean;
   onLoadDefaults: () => void;
+  onDirtyStateChange: (dirty: boolean) => void;
+  forceRestore: number;
   loadedRoomCode: string | null;
 }
 
@@ -248,6 +250,8 @@ export default function Main({
   onDeleteSoloSchedule,
   isAtDefaults,
   onLoadDefaults,
+  onDirtyStateChange,
+  forceRestore,
   loadedRoomCode,
 }: MainProps) {
   // ── Edit mode ──
@@ -259,10 +263,25 @@ export default function Main({
     if (!editMode) setPendingSettings(settings);
   }, [settings, editMode]);
 
+  // Exit edit mode when defaults are restored from outside (e.g. top-bar button)
+  useEffect(() => {
+    if (isAtDefaults && editMode) setEditMode(false);
+  }, [isAtDefaults]);
+
   const isDirty =
     editMode &&
     JSON.stringify({ ...pendingSettings, lockedFields: undefined }) !==
       JSON.stringify({ ...settings, lockedFields: undefined });
+
+  // Notify App of dirty state so top bar button can respond
+  useEffect(() => {
+    onDirtyStateChange(isDirty);
+  }, [isDirty]);
+
+  // Exit edit mode when top bar forces a restore (settings already at defaults but dirty)
+  useEffect(() => {
+    if (forceRestore > 0) setEditMode(false);
+  }, [forceRestore]);
 
   // `p` = the settings object currently displayed/editable
   const p = editMode ? pendingSettings : settings;
@@ -324,7 +343,7 @@ export default function Main({
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [saveSlot, setSaveSlot] = useState<PresetSlot>('S1');
   const [saveName, setSaveName] = useState('');
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
 
   // ── Validation ──
   const [intervalError, setIntervalError] = useState('');
@@ -706,10 +725,10 @@ export default function Main({
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-4">
             <Toggle
-              checked={settings.playSound}
-              onChange={() => onSettingsChange({ ...settings, playSound: !settings.playSound })}
+              checked={p.playSound}
+              onChange={() => editMode ? updatePending({ playSound: !p.playSound }) : onSettingsChange({ ...settings, playSound: !settings.playSound })}
             />
-            <span className="text-xl shrink-0">{settings.playSound ? '🔊' : '🔇'}</span>
+            <span className="text-xl shrink-0">{p.playSound ? '🔊' : '🔇'}</span>
             <div className="min-w-0">
               <div className="font-semibold text-gray-900">Sound</div>
               <div className="text-xs text-gray-500">Audio cues for timers.</div>
@@ -760,10 +779,28 @@ export default function Main({
                 onChange={() => {
                   if (!p.useTimedWork && !p.useMindfulness) return;
                   if (isFieldLocked('useTimedWork')) return;
-                  updatePending({
-                    useTimedWork: !p.useTimedWork,
-                    ...(!p.useTimedWork && p.useMindfulness ? { promptIntervalMinutes: derivedInterval } : {}),
-                  });
+                  if (p.useTimedWork) {
+                    // Turning OFF — restore standalone interval
+                    const stored = getStoredDefaults();
+                    let interval = 15;
+                    if (
+                      typeof stored.promptIntervalMinutes === 'number' &&
+                      stored.promptIntervalMinutes > 0 &&
+                      dividesEvenly(60, stored.promptIntervalMinutes)
+                    ) {
+                      interval = stored.promptIntervalMinutes;
+                    }
+                    updatePending({
+                      useTimedWork: false,
+                      ...(p.useMindfulness ? { promptIntervalMinutes: interval, promptCount: 0 } : {}),
+                    });
+                  } else {
+                    // Turning ON
+                    updatePending({
+                      useTimedWork: true,
+                      ...(p.useMindfulness ? { promptIntervalMinutes: derivedInterval } : {}),
+                    });
+                  }
                 }}
                 disabled={isFieldLocked('useTimedWork') || (!p.useMindfulness && p.useTimedWork)}
                 title={!p.useMindfulness ? 'Prosochai must be on if Pomodoros are off' : undefined}
@@ -782,6 +819,7 @@ export default function Main({
                     value={p.workMinutes}
                     defaultValue={modeDefaults.workMinutes}
                     unit="minutes"
+                    min={0.015}
                     disabled={isFieldLocked('workMinutes')}
                     onChange={(v) => updatePending({
                       workMinutes: v,
@@ -796,6 +834,7 @@ export default function Main({
                     value={p.breakMinutes}
                     defaultValue={derivedBreak}
                     unit="minutes"
+                    min={0.015}
                     disabled={isFieldLocked('breakMinutes')}
                     onChange={(v) => updatePending({ breakMinutes: v, longBreakMinutes: defaultLongBreakMinutes(v) })}
                   />
@@ -828,6 +867,7 @@ export default function Main({
                         value={p.longBreakMinutes}
                         defaultValue={derivedLongBreak}
                         unit="minutes"
+                        min={0.015}
                         disabled={isFieldLocked('longBreakMinutes')}
                         onChange={(v) => updatePending({ longBreakMinutes: v })}
                       />
@@ -897,6 +937,7 @@ export default function Main({
                     value={p.promptIntervalMinutes}
                     defaultValue={p.useTimedWork ? derivedInterval : modeDefaults.promptIntervalMinutes}
                     unit="minutes"
+                    min={0.015}
                     onChange={(v) => updatePending({ promptIntervalMinutes: v })}
                   />
                 </SettingField>
@@ -1452,31 +1493,6 @@ export default function Main({
         </div>
       )}
 
-      {/* ── Reset to original defaults (in edit mode) ── */}
-      {editMode && (
-        <div className="text-center">
-          {showResetConfirm ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3 text-left">
-              <p className="text-sm text-red-800">Reset ALL defaults to original factory values? This cannot be undone.</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowResetConfirm(false); onResetToOriginal(); setEditMode(false); }}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                >
-                  Confirm reset
-                </button>
-                <button onClick={() => setShowResetConfirm(false)} className="text-sm text-gray-500 hover:text-gray-700">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setShowResetConfirm(true)} className="text-sm text-gray-400 hover:text-red-500 underline">
-              Reset to original defaults
-            </button>
-          )}
-        </div>
-      )}
 
       {/* ── Main action button ── */}
       <Button onClick={handleMainAction} disabled={hostGenerating} className="w-full text-base">
@@ -1495,15 +1511,6 @@ export default function Main({
 
       {hostError && (
         <p className="text-sm text-red-600 text-center">{hostError}</p>
-      )}
-
-      {/* ── Reset to saved defaults (locked mode only) ── */}
-      {!isAtDefaults && !editMode && (
-        <div className="text-center">
-          <button onClick={onLoadDefaults} className="text-sm text-gray-400 underline hover:text-indigo-600 transition-colors">
-            Reset to my saved defaults
-          </button>
-        </div>
       )}
 
       {/* ── Join a Coworking Session ── */}
@@ -1592,6 +1599,16 @@ export default function Main({
           </div>
         )}
       </div>
+
+      {/* ── Restore my defaults (bottom) ── */}
+      {(!isAtDefaults || isDirty) && (
+        <button
+          onClick={() => { onLoadDefaults(); setEditMode(false); }}
+          className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors underline"
+        >
+          Restore my defaults
+        </button>
+      )}
     </div>
   );
 }

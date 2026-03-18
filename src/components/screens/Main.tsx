@@ -28,7 +28,6 @@ import {
 import { formatNum } from '@/lib/format';
 import { dividesEvenly, formatDivisorList } from '@/lib/validation';
 import Button from '../ui/Button';
-import SettingsDisplay from '../ui/SettingsDisplay';
 import WhenSection from '../ui/WhenSection';
 
 // ── Local UI primitives ───────────────────────────────────────────────────────
@@ -216,7 +215,6 @@ interface MainProps {
   onScheduledStart: (startMs: number) => void;
   onSaveAsDefault: (s: Settings) => void;
   onSavePreset: (slot: PresetSlot, name: string, s: Settings) => void;
-  onResetToOriginal: () => void;
   onLoadPreset: (s: Settings, slot?: PresetSlot, name?: string) => void;
   onLoadSession: (room: CoworkRoom) => void;
   onSaveToRoom: (s: Settings) => void;
@@ -224,10 +222,7 @@ interface MainProps {
   onJoinAsHost: (room: CoworkRoom, startMs: number) => void;
   onCoworkGuestStart: (room: CoworkRoom, mode: GuestContentMode, startMs: number) => void;
   onDeleteSoloSchedule: (id: string) => void;
-  isAtDefaults: boolean;
-  onLoadDefaults: () => void;
   onDirtyStateChange: (dirty: boolean) => void;
-  forceRestore: number;
   loadedRoomCode: string | null;
 }
 
@@ -240,7 +235,6 @@ export default function Main({
   onScheduledStart,
   onSaveAsDefault,
   onSavePreset,
-  onResetToOriginal,
   onLoadPreset,
   onLoadSession,
   onSaveToRoom,
@@ -248,45 +242,35 @@ export default function Main({
   onJoinAsHost,
   onCoworkGuestStart,
   onDeleteSoloSchedule,
-  isAtDefaults,
-  onLoadDefaults,
   onDirtyStateChange,
-  forceRestore,
   loadedRoomCode,
 }: MainProps) {
-  // ── Edit mode ──
-  const [editMode, setEditMode] = useState(false);
   const [pendingSettings, setPendingSettings] = useState<Settings>(settings);
 
-  // Sync pending when settings change externally (preset load, etc.)
+  // Sync pending when settings change externally (preset load, defaults restore, etc.)
   useEffect(() => {
-    if (!editMode) setPendingSettings(settings);
-  }, [settings, editMode]);
+    setPendingSettings(settings);
+  }, [settings]);
 
-  // Exit edit mode when defaults are restored from outside (e.g. top-bar button)
-  useEffect(() => {
-    if (isAtDefaults && editMode) setEditMode(false);
-  }, [isAtDefaults]);
+  // `p` = the settings object currently displayed/editable (always pending)
+  const p = pendingSettings;
+  const updatePending = (partial: Partial<Settings>) =>
+    setPendingSettings((prev) => ({ ...prev, ...partial }));
 
+  // isDirty: pending differs from last committed settings (controls save options bar)
   const isDirty =
-    editMode &&
     JSON.stringify({ ...pendingSettings, lockedFields: undefined }) !==
       JSON.stringify({ ...settings, lockedFields: undefined });
 
-  // Notify App of dirty state so top bar button can respond
-  useEffect(() => {
-    onDirtyStateChange(isDirty);
-  }, [isDirty]);
+  // Notify App whether pending differs from defaults (controls "Restore defaults" button)
+  const currentDefaults: Settings = { ...getDefaults(), ...getStoredDefaults() };
+  const isPendingAtDefaults =
+    JSON.stringify({ ...pendingSettings, lockedFields: undefined }) ===
+      JSON.stringify({ ...currentDefaults, lockedFields: undefined });
 
-  // Exit edit mode when top bar forces a restore (settings already at defaults but dirty)
   useEffect(() => {
-    if (forceRestore > 0) setEditMode(false);
-  }, [forceRestore]);
-
-  // `p` = the settings object currently displayed/editable
-  const p = editMode ? pendingSettings : settings;
-  const updatePending = (partial: Partial<Settings>) =>
-    setPendingSettings((prev) => ({ ...prev, ...partial }));
+    onDirtyStateChange(!isPendingAtDefaults);
+  }, [isPendingAtDefaults]);
 
   const isFieldLocked = (field: keyof Settings) =>
     settings.lockedFields?.includes(field) ?? false;
@@ -301,7 +285,6 @@ export default function Main({
   const [renamingSlot, setRenamingSlot] = useState<PresetSlot | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<PresetSlot | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmSaveAsDefault, setConfirmSaveAsDefault] = useState(false);
   const [expandPresets, setExpandPresets] = useState(false);
   const [openDropdownPreset, setOpenDropdownPreset] = useState<PresetSlot | null>(null);
@@ -385,29 +368,6 @@ export default function Main({
     return () => document.removeEventListener('mousedown', handler);
   }, [openDropdownPreset, openDropdownRoom, openDropdownSolo]);
 
-  // ── Edit mode toggle ──
-
-  const handleToggleEdit = () => {
-    if (editMode && isDirty) {
-      setConfirmDiscard(true);
-      return;
-    }
-    if (editMode) {
-      setPendingSettings(settings);
-      setIntervalError('');
-      setShowSavePreset(false);
-    }
-    setEditMode((v) => !v);
-  };
-
-  const handleConfirmDiscard = () => {
-    setConfirmDiscard(false);
-    setPendingSettings(settings);
-    setIntervalError('');
-    setShowSavePreset(false);
-    setEditMode(false);
-  };
-
   // ── Preset handlers ──
 
   const refreshPresets = () => setPresets(listPresets());
@@ -416,7 +376,6 @@ export default function Main({
     const preset = presets.find((pr) => pr.slot === slot);
     if (preset) {
       onLoadPreset(preset.preset.settings, slot, preset.preset.name);
-      setEditMode(false);
     }
   };
 
@@ -605,12 +564,9 @@ export default function Main({
       }
     }
 
-    // If in edit mode, commit pending settings before acting
-    if (editMode) {
-      onSettingsChange(p);
-      setEditMode(false);
-      setShowSavePreset(false);
-    }
+    // Commit pending settings before acting
+    onSettingsChange(p);
+    setShowSavePreset(false);
 
     if (p.isCoworking && !loadedRoomCode) {
       await handleCreateAndHost();
@@ -643,7 +599,6 @@ export default function Main({
 
   const handleSaveAsDefault = () => {
     onSaveAsDefault(pendingSettings);
-    setEditMode(false);
     setShowSavePreset(false);
   };
 
@@ -652,19 +607,16 @@ export default function Main({
     if (!name) return;
     onSavePreset(saveSlot, name, pendingSettings);
     refreshPresets();
-    setEditMode(false);
     setShowSavePreset(false);
     setSaveName('');
   };
 
   const handleSaveToRoom = async () => {
     await onSaveToRoom(pendingSettings);
-    setEditMode(false);
   };
 
   const handleApply = () => {
     onSettingsChange(pendingSettings);
-    setEditMode(false);
     setShowSavePreset(false);
   };
 
@@ -719,60 +671,26 @@ export default function Main({
         )}
       </div>
 
-      {/* ── Sound + Edit settings cards ── */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Sound card */}
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-4">
-            <Toggle
-              checked={p.playSound}
-              onChange={() => editMode ? updatePending({ playSound: !p.playSound }) : onSettingsChange({ ...settings, playSound: !settings.playSound })}
-            />
-            <span className="text-xl shrink-0">{p.playSound ? '🔊' : '🔇'}</span>
-            <div className="min-w-0">
-              <div className="font-semibold text-gray-900">Sound</div>
-              <div className="text-xs text-gray-500">Audio cues for timers.</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Edit settings card */}
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-4">
-            <Toggle
-              checked={editMode}
-              onChange={handleToggleEdit}
-            />
-            <span className="text-xl shrink-0">✎</span>
-            <div className="min-w-0">
-              <div className="font-semibold text-gray-900">Edit</div>
-              <div className="text-xs text-gray-500">Customize settings.</div>
-            </div>
+      {/* ── Sound card ── */}
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4">
+          <Toggle
+            checked={p.playSound}
+            onChange={() => updatePending({ playSound: !p.playSound })}
+          />
+          <span className="text-xl shrink-0">{p.playSound ? '🔊' : '🔇'}</span>
+          <div className="min-w-0">
+            <div className="font-semibold text-gray-900">Sound</div>
+            <div className="text-xs text-gray-500">Audio cues for timers.</div>
           </div>
         </div>
       </div>
 
-      {/* ── Settings display (locked) or edit form ── */}
-      {!editMode ? (
-        <SettingsDisplay settings={settings} onChange={onSettingsChange} />
-      ) : (
-        <div className="space-y-5">
-          {confirmDiscard ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 flex items-center justify-between gap-3">
-              <p className="text-xs text-amber-800">Discard unsaved changes?</p>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => setConfirmDiscard(false)} className="text-xs px-2.5 py-1 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Keep editing</button>
-                <button onClick={handleConfirmDiscard} className="text-xs px-2.5 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Discard</button>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-700">
-              Edit mode — click <strong>Save options</strong> below when done, or toggle <strong>Edit</strong> off to discard.
-            </div>
-          )}
+      {/* ── Settings ── */}
+      <div className="space-y-5">
 
-          {/* ── Pomodoro edit section ── */}
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        {/* ── Pomodoro edit section ── */}
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 px-5 py-4">
               <Toggle
                 checked={p.useTimedWork}
@@ -987,25 +905,10 @@ export default function Main({
             )}
           </div>
 
-        </div>
-      )}
+      </div>
 
       {/* ── Timing section ── */}
-      {!editMode ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">When</h3>
-          <p className="text-sm text-gray-600">
-            {settings.startType === 'now' && 'Immediately'}
-            {settings.startType === 'specific' && settings.startTime
-              ? formatDate(specificDate, settings.startTime)
-              : settings.startType === 'specific' ? 'No time set' : null}
-            {settings.startType === 'recurring' && settings.startDays?.length && settings.startTime
-              ? formatRecurring(settings.startDays as CoworkDay[], settings.startTime)
-              : settings.startType === 'recurring' ? 'Recurring (configure in edit mode)' : null}
-          </p>
-        </div>
-      ) : (
-        <WhenSection
+      <WhenSection
           startType={isFieldLocked('startType') ? settings.startType : p.startType}
           onStartTypeChange={(t) => { if (!isFieldLocked('startType')) updatePending({ startType: t }); }}
           specificDate={specificDate}
@@ -1023,21 +926,16 @@ export default function Main({
           showActions={false}
           heading={isFieldLocked('startType') ? 'When (set by host)' : 'When should this session start?'}
         />
-      )}
 
       {/* ── Coworking section ── */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-3">
         <div className="flex items-center gap-3">
           <Toggle
-            checked={editMode ? p.isCoworking : settings.isCoworking}
+            checked={p.isCoworking}
             disabled={isFieldLocked('isCoworking')}
             onChange={() => {
               if (isFieldLocked('isCoworking')) return;
-              if (editMode) {
-                updatePending({ isCoworking: !p.isCoworking });
-              } else {
-                onSettingsChange({ ...settings, isCoworking: !settings.isCoworking });
-              }
+              updatePending({ isCoworking: !p.isCoworking });
             }}
           />
           <span className="text-sm font-medium text-gray-700">
@@ -1052,7 +950,7 @@ export default function Main({
           )}
         </div>
 
-        {(editMode ? p.isCoworking : settings.isCoworking) && !isFieldLocked('isCoworking') && (
+        {p.isCoworking && !isFieldLocked('isCoworking') && (
           <div className="space-y-3 pt-1">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Session name</label>
@@ -1064,15 +962,12 @@ export default function Main({
                 className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
               />
             </div>
-            {settings.useMindfulness && (
+            {p.useMindfulness && (
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={editMode ? p.sharePrompts : settings.sharePrompts}
-                  onChange={() => {
-                    if (editMode) updatePending({ sharePrompts: !p.sharePrompts });
-                    else onSettingsChange({ ...settings, sharePrompts: !settings.sharePrompts });
-                  }}
+                  checked={p.sharePrompts}
+                  onChange={() => updatePending({ sharePrompts: !p.sharePrompts })}
                   className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <span className="text-sm text-gray-700">Share my Prosochai with guests</span>
@@ -1146,7 +1041,6 @@ export default function Main({
                                   };
                                   onSettingsChange({ ...base, ...updates });
                                   if (soloSchedule.type === 'specific') setSpecificDate(soloSchedule.date);
-                                  setEditMode(false);
                                 }}
                               >
                                 {soloSchedule.type === 'specific'
@@ -1407,8 +1301,8 @@ export default function Main({
         </div>
       )}
 
-      {/* ── Save options (edit mode with changes) ── */}
-      {editMode && isDirty && (
+      {/* ── Save options ── */}
+      {isDirty && (
         <div className="rounded-2xl border border-indigo-300 bg-indigo-50 p-4 space-y-3">
           {confirmSaveAsDefault ? (
             <>
@@ -1600,15 +1494,6 @@ export default function Main({
         )}
       </div>
 
-      {/* ── Restore my defaults (bottom) ── */}
-      {(!isAtDefaults || isDirty) && (
-        <button
-          onClick={() => { onLoadDefaults(); setEditMode(false); }}
-          className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors underline"
-        >
-          Restore my defaults
-        </button>
-      )}
     </div>
   );
 }

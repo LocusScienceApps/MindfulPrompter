@@ -4,6 +4,31 @@ Reverse chronological order (most recent first).
 
 ---
 
+## Session 38 — 2026-03-18 (wmben PC — Redesign v2 Stage 1: unified always-editable view)
+
+**What was done:**
+
+**Stage 1 of three-stage redesign — unified main view (no more edit-lock toggle):**
+- Removed `editMode` state, the Edit toggle card, the discard-changes confirm dialog, and the "Edit mode" banner
+- `SettingsDisplay` (read-only summary cards) removed from Main screen — full editable form is always shown
+- `p` (pending settings) is now unconditionally the displayed settings — no more `editMode ? pendingSettings : settings`
+- Timing section always shows `WhenSection` (no more plain-text fallback)
+- Sound, Coworking, and sharePrompts toggles now all go through `updatePending` (previously committed immediately)
+- `isDirty` = pending ≠ last committed (controls save options bar, which now shows whenever there are unsaved changes regardless of any mode)
+- `isPendingAtDefaults` = pending ≠ saved defaults — fires `onDirtyStateChange` to control top-bar "Restore defaults" button
+- "Restore my defaults" renamed to **"Restore defaults"** in top bar; condition simplified to just `editDirty` (pending ≠ defaults)
+- Bottom "Restore my defaults" link in Main removed (redundant)
+- Loading a preset or session no longer exits edit mode — settings load directly into pending state
+- Removed props from Main: `isAtDefaults`, `onLoadDefaults`, `onResetToOriginal`, `forceRestore`
+- Removed `forceRestore` state from App; removed `isAtDefaults` computed value from App
+- `SettingsDisplay` component still exists in codebase (used nowhere currently — candidate for deletion later)
+
+**Stages 2 and 3 still to do:**
+- Stage 2: Combine Presets and Scheduled Sessions into a single card with collapsible subsections
+- Stage 3: Redesign Start/Save button area — single card at bottom with context-sensitive buttons
+
+---
+
 ## Session 37 — 2026-03-14 (wmben PC — UI fixes, Settings modal, Why Prosochai text revisions)
 
 **What was done:**

@@ -1,6 +1,6 @@
 # Prosochai TODO
 
-## Status: Session 36 complete — Sessions section overhaul (Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting); regression testing still needed
+## Status: Session 38 complete — Redesign v2 Stage 1: unified always-editable view (edit-lock removed); regression testing still needed
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -17,6 +17,8 @@
 ### 7. ✅ Session 33: tooltip fixes + "Why Prosochai?" modal + tauri-plugin-opener for external links — **implemented**
 ### 8. ✅ Sessions 34–35: Wikipedia links in Key Terms, edit mode card headers, discard/save-default confirmations, solo schedule click fix + settings snapshot — **implemented**
 ### 9. ✅ Session 36: Sessions section overhaul — Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting (`formatLocale.ts`), solo card Options dropdown (Rename/Delete), startup auto-launch bug fix — **implemented**
+### 10. ✅ Session 37: UI fixes, Settings modal (⚙ gear → "Restore software defaults"), Why Prosochai text revisions — **implemented**
+### 11. ✅ Session 38: Redesign v2 Stage 1 — unified always-editable view; edit-lock toggle + SettingsDisplay removed; all fields always shown as editable form; all changes pending until saved/started — **implemented**
 
 ---
 
@@ -27,56 +29,58 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 ### A. App startup / main screen
 - [ ] App opens on Main screen (only screen — no Customize, no Summary)
 - [ ] Header + Prosochai tagline visible
-- [ ] **Locked mode (default):** SettingsDisplay shows Pomodoro + Prosochai cards; no editable inputs visible
-- [ ] Top-right shows "✎ Edit settings" toggle
+- [ ] **Full editable form always shown** — no locked/display mode; all fields immediately editable
+- [ ] No "Edit settings" toggle visible
+- [ ] Sound card at top; WhenSection visible; Coworking section visible
 - [ ] "Saved Presets" section collapsed if presets exist; hidden if none
 - [ ] "Scheduled & Active Sessions" section collapsed if sessions exist; hidden if none
 - [ ] "Join a Coworking Session ▼" panel at bottom (collapsed)
 - [ ] Main action button: "Start Session Now" (green) when `startType === 'now'` and not coworking
+- [ ] "Restore defaults" link in top bar only appears when pending settings differ from saved defaults; hidden when they match
 
-### B. Edit-lock toggle
-- [ ] Click "✎ Edit settings" → edit mode activates; all fields become editable inputs
-- [ ] Toggle reads "✕ Done" in edit mode
-- [ ] Toggle off with no changes → returns to locked mode silently
-- [ ] Toggle off with unsaved changes → prompt: discard or stay in edit mode
-- [ ] Sound, isCoworking, useTimedWork, useMindfulness toggles work in **both** locked and edit mode (quick-intent changes)
-- [ ] Changing a toggle in locked mode automatically enters edit mode
+### B. Settings always-editable behavior
+- [ ] All fields editable immediately without any toggle
+- [ ] Changing any field marks settings as pending (save options bar appears)
+- [ ] Loading a preset loads settings into the editable form (does not auto-start or auto-save)
+- [ ] Loading a session card loads settings into the editable form
+- [ ] "Restore defaults" in top bar loads defaults into editable form (pending state)
+- [ ] After restoring defaults, "Restore defaults" button disappears (pending now matches defaults)
 
-### C. Edit mode — Pomodoro section
+### C. Pomodoro section
 - [ ] Pomodoro section On/Off toggle present in edit mode
 - [ ] Guard: can't turn both Pomodoro and Prosochai off simultaneously
 - [ ] Fields only visible when Pomodoro is on: workMinutes, breakMinutes, sessionsPerSet
 - [ ] "Multiple sets" toggle shows/hides longBreakMinutes, numberOfSets
 - [ ] Combined mode: prompt interval validates it divides evenly into work period length
 
-### D. Edit mode — Prosochai section
+### D. Prosochai section
 - [ ] Prosochai section On/Off toggle present in edit mode
 - [ ] Fields only visible when Prosochai is on: promptText, promptIntervalMinutes, dismissSeconds
 - [ ] `promptCount` only shown when Pomodoro is OFF (mindfulness-only mode)
 - [ ] `bothMindfulnessScope` radio buttons only shown when Pomodoro is ON
 - [ ] Mindfulness-only: prompt interval validates it divides evenly into 60
 
-### E. Edit mode — Timing section (WhenSection)
+### E. Timing section (WhenSection)
 - [ ] WhenSection embedded in edit mode (no Start/Schedule buttons; action button is at bottom)
 - [ ] "Start now" / "Specific date & time" / "Recurring schedule" work as before
 - [ ] Specific date/time: date + time inputs expand
 - [ ] Recurring: day picker + time + timezone inline
 - [ ] startType, startTime, startDays saved into settings (persist in presets)
 
-### F. Edit mode — Coworking section
+### F. Coworking section
 - [ ] `isCoworking` toggle shown
 - [ ] When on: session name field + `sharePrompts` toggle visible
 - [ ] When off: coworking fields hidden
 - [ ] Locked fields for guests shown with "set by host" indicator (see K)
 
 ### G. Save options bar
-- [ ] Appears at bottom of edit mode only when `isDirty` (changes exist)
-- [ ] "Save as default" → saves to defaults storage; locked mode shows updated values
-- [ ] "Save as preset…" → inline slot/name picker; saves; locked mode shows updated values
+- [ ] Appears whenever pending settings differ from committed settings (`isDirty`)
+- [ ] "For next session" → commits settings without saving to storage (no longer "Apply (don't save)")
+- [ ] "As preset…" → inline slot/name picker; saves
 - [ ] "Save to session" → visible only when a cowork room is loaded; calls `onSaveToRoom`
-- [ ] "Apply (don't save)" → commits settings without saving to storage; returns to locked mode
-- [ ] No save options bar when no changes (not dirty)
-- [ ] "Reset to original defaults" link visible in edit mode
+- [ ] "As default" → saves to defaults storage; "Restore defaults" button disappears if pending now matches
+- [ ] No save options bar when pending matches committed (not dirty)
+- [ ] ⚠ Save/Start button area has known issues — full redesign planned as Stage 3
 
 ### H. Main action button
 - [ ] `startType: 'now'` + coworking off → green "Start Session Now"
@@ -160,9 +164,19 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 
 ---
 
-## 9. ⏳ Known bug: "Save options" bar doesn't appear for all edit mode changes
+## 9. ⏳ Redesign v2 Stage 2: Combine Presets + Sessions into one card
 
-The "Save options" bar (including "As default") only appears when `isDirty` — i.e. when `pendingSettings` differs from `settings`. But some changes (e.g. toggling Pomodoros or Prosochai on/off in certain states) may not reliably trigger this. The user currently has to change the "When does this session start?" field to get the bar to appear. To be addressed as part of a planned overhaul of the save/start button organization.
+Currently "Saved Presets" and "Scheduled & Active Sessions" are two separate collapsible cards. Plan: merge into a single card with collapsible subsections (Presets, Solo, Coworking).
+
+## 10. ⏳ Redesign v2 Stage 3: Start/Save button area redesign
+
+Replace the current separate save-options bar + main action button with a single unified card at bottom containing context-sensitive buttons. Buttons shown depend on: whether changes are pending, what template is loaded (default/preset/active session), and start type (now/specific/recurring). Issues with current button states to be fixed as part of this redesign.
+
+**Button placement:** below the Presets/Sessions card, above the "Join a Coworking Session" link.
+
+**Known issue with current buttons:** Several label/activation cases are wrong or buggy — do not attempt to fix individually; address holistically in Stage 3.
+
+**Known issue: start dates in presets/defaults:** When saving with `startType === 'specific'`, user should be warned that the date cannot be saved (only the time), and it should silently convert to `startType: 'now'` or strip the date. Currently does not happen correctly.
 
 ---
 

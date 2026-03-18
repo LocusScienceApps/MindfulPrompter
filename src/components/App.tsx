@@ -48,7 +48,6 @@ export default function App() {
   const [showWhy, setShowWhy] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editDirty, setEditDirty] = useState(false);
-  const [forceRestore, setForceRestore] = useState(0);
 
   // Code of the currently-loaded cowork session on Main (distinct from coworkRoomCode
   // which tracks the active timer session). Used for "Save changes to session" logic.
@@ -206,10 +205,6 @@ export default function App() {
     setSettings(getInitialSettings());
     setLoadedRoomCode(null);
   };
-
-  const isAtDefaults =
-    JSON.stringify({ ...settings, lockedFields: undefined }) ===
-    JSON.stringify({ ...getInitialSettings(), lockedFields: undefined });
 
   const isAtSoftwareDefaults =
     JSON.stringify({ ...getInitialSettings(), lockedFields: undefined }) ===
@@ -407,12 +402,12 @@ export default function App() {
               <img src="/images/logo.png" alt="" className="h-5 w-auto shrink-0" />
               <span>Prosochai</span>
             </button>
-          ) : (!isAtDefaults || editDirty) ? (
+          ) : editDirty ? (
             <button
-              onClick={() => { handleLoadDefaults(); setForceRestore(k => k + 1); }}
+              onClick={handleLoadDefaults}
               className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors underline"
             >
-              Restore my defaults
+              Restore defaults
             </button>
           ) : (
             <div />
@@ -510,7 +505,6 @@ export default function App() {
               onScheduledStart={handleScheduledStart}
               onSaveAsDefault={handleSaveAsDefault}
               onSavePreset={handleSavePreset}
-              onResetToOriginal={handleResetToOriginal}
               onLoadPreset={handleLoadPreset}
               onLoadSession={handleLoadSession}
               onSaveToRoom={handleSaveToRoom}
@@ -518,10 +512,7 @@ export default function App() {
               onJoinAsHost={handleJoinAsHost}
               onCoworkGuestStart={handleCoworkGuestStart}
               onDeleteSoloSchedule={handleCancelSchedule}
-              isAtDefaults={isAtDefaults}
-              onLoadDefaults={handleLoadDefaults}
               onDirtyStateChange={setEditDirty}
-              forceRestore={forceRestore}
               loadedRoomCode={loadedRoomCode}
             />
           </>

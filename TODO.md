@@ -1,6 +1,6 @@
 # Prosochai TODO
 
-## Status: Session 38 complete — Redesign v2 Stage 1: unified always-editable view (edit-lock removed); regression testing still needed
+## Status: Session 39 complete — Redesign v2 Stages 2–5: Saved Sessions card + unified Start/Save card; regression testing still needed
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -19,6 +19,7 @@
 ### 9. ✅ Session 36: Sessions section overhaul — Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting (`formatLocale.ts`), solo card Options dropdown (Rename/Delete), startup auto-launch bug fix — **implemented**
 ### 10. ✅ Session 37: UI fixes, Settings modal (⚙ gear → "Restore software defaults"), Why Prosochai text revisions — **implemented**
 ### 11. ✅ Session 38: Redesign v2 Stage 1 — unified always-editable view; edit-lock toggle + SettingsDisplay removed; all fields always shown as editable form; all changes pending until saved/started — **implemented**
+### 12. ✅ Session 39: Redesign v2 Stages 2–5 — Saved Sessions unified card (Live/Upcoming/Recent/Templates subsections); endedAt cowork tracking; End session from Main; unified Start/Save card; actionLabel + handleMainAction guest fix — **implemented**
 
 ---
 
@@ -164,17 +165,13 @@ Run `dev-browser.bat` and work through these in order. Fix bugs before moving on
 
 ---
 
-## 9. ⏳ Redesign v2 Stage 2: Combine Presets + Sessions into one card
+## 9. ✅ Redesign v2 Stage 2: Combine Presets + Sessions into one card — **implemented (Session 39)**
 
-Currently "Saved Presets" and "Scheduled & Active Sessions" are two separate collapsible cards. Plan: merge into a single card with collapsible subsections (Presets, Solo, Coworking).
+Single "Saved Sessions" card with four collapsible subsections: Live, Upcoming, Recent, Templates. Each row has Solo/Coworking badge, clickable name loads into pending state, Options ▾ (Rename/Delete). Live cowork rows also have "End session" option.
 
-## 10. ⏳ Redesign v2 Stage 3: Start/Save button area redesign
+## 10. ✅ Redesign v2 Stage 3: Start/Save button area redesign — **implemented (Session 39)**
 
-Replace the current separate save-options bar + main action button with a single unified card at bottom containing context-sensitive buttons. Buttons shown depend on: whether changes are pending, what template is loaded (default/preset/active session), and start type (now/specific/recurring). Issues with current button states to be fixed as part of this redesign.
-
-**Button placement:** below the Presets/Sessions card, above the "Join a Coworking Session" link.
-
-**Known issue with current buttons:** Several label/activation cases are wrong or buggy — do not attempt to fix individually; address holistically in Stage 3.
+Single unified card: save options section (when dirty) at top + primary action button below. `actionLabel` and `handleMainAction` fixed for guest flow. "Schedule Session" label fixed (was "Start Countdown").
 
 **Known issue: start dates in presets/defaults:** When saving with `startType === 'specific'`, user should be warned that the date cannot be saved (only the time), and it should silently convert to `startType: 'now'` or strip the date. Currently does not happen correctly.
 

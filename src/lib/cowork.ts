@@ -116,6 +116,15 @@ export async function deleteRoom(code: string): Promise<void> {
   await remove(ref(db, `host-rooms/${uid}/${code}`));
 }
 
+/** Mark a room as ended. Room stays in Firebase so the code can be reused. */
+export async function endRoom(code: string): Promise<void> {
+  const uid = await ensureAuth();
+  const room = await getRoom(code);
+  if (!room) return;
+  if (room.hostUid !== uid) throw new Error('Only the host can end this room.');
+  await set(ref(db, `rooms/${code}`), stripUndefined({ ...room, endedAt: Date.now() }));
+}
+
 /** Get all rooms hosted by the current user (up to 5). */
 export async function getHostRooms(): Promise<CoworkRoom[]> {
   const uid = await ensureAuth();
@@ -228,6 +237,7 @@ export interface RoomTiming {
 
 /** Compute the effective start time and session status for a room. */
 export function computeRoomTiming(room: CoworkRoom): RoomTiming | null {
+  if (room.endedAt) return null;
   const now = Date.now();
   const durationMs = room.timingSettings
     ? computeSessionDurationMs(room.timingSettings)

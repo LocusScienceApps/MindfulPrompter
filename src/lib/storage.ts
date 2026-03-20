@@ -1,10 +1,10 @@
-import type { Settings, SettingsFile, Preset, PresetSlot } from './types';
+import type { Settings, SettingsFile, Template, TemplateSlot, RecentSession, SoloSession } from './types';
 import { isTauri } from './tauri';
 
 const STORAGE_KEY = 'mindful-prompter-v3';
 const SETTINGS_FILE = 'settings.json';
 
-let cache: SettingsFile = { presets: {} };
+let cache: SettingsFile = { templates: {} };
 
 // ── Initialization ─────────────────────────────────────────────────────────────
 
@@ -27,13 +27,19 @@ async function loadFromTauri(): Promise<SettingsFile> {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     // v2 format detection: has defaultsP/M/B keys → wipe and start fresh (v3 migration)
     if ('defaultsP' in parsed || 'defaultsM' in parsed || 'defaultsB' in parsed) {
-      return { presets: {} };
+      return { templates: {} };
     }
-    const file = parsed as unknown as SettingsFile;
-    return { ...file, presets: file.presets ?? {} };
+    // Migrate legacy presets → templates
+    const anyParsed = parsed as unknown as Record<string, unknown>;
+    if (anyParsed.presets && !anyParsed.templates) {
+      anyParsed.templates = anyParsed.presets;
+      delete anyParsed.presets;
+    }
+    const file = anyParsed as unknown as SettingsFile;
+    return { ...file, templates: file.templates ?? {} };
   } catch {
     // File doesn't exist yet (first launch) or read failed — start fresh
-    return { presets: {} };
+    return { templates: {} };
   }
 }
 
@@ -45,11 +51,18 @@ function loadFromLocalStorage(): SettingsFile {
       localStorage.removeItem('mindful-prompter-v2');
     }
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { presets: {} };
-    const parsed = JSON.parse(raw) as SettingsFile;
-    return { ...parsed, presets: parsed.presets ?? {} };
+    if (!raw) return { templates: {} };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Migrate legacy presets → templates
+    const anyParsed = parsed as unknown as Record<string, unknown>;
+    if (anyParsed.presets && !anyParsed.templates) {
+      anyParsed.templates = anyParsed.presets;
+      delete anyParsed.presets;
+    }
+    const file = anyParsed as unknown as SettingsFile;
+    return { ...file, templates: file.templates ?? {} };
   } catch {
-    return { presets: {} };
+    return { templates: {} };
   }
 }
 
@@ -100,7 +113,7 @@ export function importSettings(json: string): boolean {
   try {
     const parsed = JSON.parse(json) as SettingsFile;
     if (typeof parsed !== 'object' || parsed === null) return false;
-    const file: SettingsFile = { ...parsed, presets: parsed.presets ?? {} };
+    const file: SettingsFile = { ...parsed, templates: parsed.templates ?? {} };
     saveFile(file);
     return true;
   } catch {
@@ -136,74 +149,72 @@ export function clearDefaults(): void {
   saveFile(file);
 }
 
-// ── Presets ────────────────────────────────────────────────────────────────────
+// ── Templates ──────────────────────────────────────────────────────────────────
 
 /**
- * List all occupied preset slots in slot order (S1–S5).
+ * List all occupied template slots in slot order (S1–S5).
  */
-export function listPresets(): Array<{ slot: PresetSlot; preset: Preset }> {
+export function listTemplates(): Array<{ slot: TemplateSlot; preset: Template }> {
   const file = loadFile();
-  const result: Array<{ slot: PresetSlot; preset: Preset }> = [];
+  const result: Array<{ slot: TemplateSlot; preset: Template }> = [];
   for (let i = 1; i <= 5; i++) {
-    const slot = `S${i}` as PresetSlot;
-    const preset = file.presets[slot];
+    const slot = `S${i}` as TemplateSlot;
+    const preset = file.templates[slot];
     if (preset) result.push({ slot, preset });
   }
   return result;
 }
 
 /**
- * Get all 5 preset slots, including empty ones.
- * Used when saving a preset so the user can see which slots are free.
+ * Get all 5 template slots, including empty ones.
+ * Used when saving a template so the user can see which slots are free.
  */
-export function getPresetSlots(): Array<{ slot: PresetSlot; preset: Preset | null }> {
+export function getTemplateSlots(): Array<{ slot: TemplateSlot; preset: Template | null }> {
   const file = loadFile();
   return Array.from({ length: 5 }, (_, i) => {
-    const slot = `S${i + 1}` as PresetSlot;
-    return { slot, preset: file.presets[slot] ?? null };
+    const slot = `S${i + 1}` as TemplateSlot;
+    return { slot, preset: file.templates[slot] ?? null };
   });
 }
 
 /**
- * Save a preset to a slot.
+ * Save a template to a slot.
  */
-export function savePreset(slot: PresetSlot, preset: Preset): void {
+export function saveTemplate(slot: TemplateSlot, preset: Template): void {
   const file = loadFile();
-  file.presets[slot] = preset;
+  file.templates[slot] = preset;
   saveFile(file);
 }
 
 /**
- * Load a preset from a slot. Returns null if the slot is empty.
+ * Load a template from a slot. Returns null if the slot is empty.
  */
-export function loadPreset(slot: PresetSlot): Preset | null {
+export function loadTemplate(slot: TemplateSlot): Template | null {
   const file = loadFile();
-  return file.presets[slot] ?? null;
+  return file.templates[slot] ?? null;
 }
 
 /**
- * Rename a preset in a slot.
+ * Rename a template in a slot.
  */
-export function renamePreset(slot: PresetSlot, newName: string): void {
+export function renameTemplate(slot: TemplateSlot, newName: string): void {
   const file = loadFile();
-  if (file.presets[slot]) {
-    file.presets[slot] = { ...file.presets[slot], name: newName };
+  if (file.templates[slot]) {
+    file.templates[slot] = { ...file.templates[slot], name: newName };
     saveFile(file);
   }
 }
 
 /**
- * Delete a preset from a slot.
+ * Delete a template from a slot.
  */
-export function deletePreset(slot: PresetSlot): void {
+export function deleteTemplate(slot: TemplateSlot): void {
   const file = loadFile();
-  delete file.presets[slot];
+  delete file.templates[slot];
   saveFile(file);
 }
 
 // ── Solo Schedules ──────────────────────────────────────────────────────────
-
-import type { SoloSession } from './types';
 
 /** Load all saved solo sessions, migrating legacy single-object format if needed. */
 export function getSoloSchedules(): SoloSession[] {
@@ -215,11 +226,11 @@ export function getSoloSchedules(): SoloSession[] {
   return [{ ...legacy, id: 'legacy' } as SoloSession];
 }
 
-/** Add a new solo session (max 5). Returns the created session, or null if at cap. */
+/** Add a new solo session (max 3). Returns the created session, or null if at cap. */
 export function addSoloSchedule(schedule: SoloSession): SoloSession | null {
   const file = loadFile();
   const current = getSoloSchedules();
-  if (current.length >= 5) return null;
+  if (current.length >= 3) return null;
   const newSession: SoloSession = { ...schedule, id: Date.now().toString() } as SoloSession;
   file.soloSchedule = [...current, newSession];
   saveFile(file);
@@ -237,5 +248,34 @@ export function updateSoloSchedule(session: SoloSession): void {
 export function deleteSoloSchedule(id: string): void {
   const file = loadFile();
   file.soloSchedule = getSoloSchedules().filter((s) => s.id !== id);
+  saveFile(file);
+}
+
+// ── Recent Sessions ─────────────────────────────────────────────────────────
+
+const MAX_RECENTS = 5;
+
+export function getRecentSessions(): RecentSession[] {
+  return loadFile().recentSessions ?? [];
+}
+
+export function addRecentSession(session: Omit<RecentSession, 'id'>): void {
+  const file = loadFile();
+  const entry: RecentSession = { ...session, id: Date.now().toString() };
+  file.recentSessions = [entry, ...(file.recentSessions ?? [])].slice(0, MAX_RECENTS);
+  saveFile(file);
+}
+
+export function renameRecentSession(id: string, newName: string): void {
+  const file = loadFile();
+  file.recentSessions = (file.recentSessions ?? []).map((s) =>
+    s.id === id ? { ...s, name: newName } : s
+  );
+  saveFile(file);
+}
+
+export function deleteRecentSession(id: string): void {
+  const file = loadFile();
+  file.recentSessions = (file.recentSessions ?? []).filter((s) => s.id !== id);
   saveFile(file);
 }

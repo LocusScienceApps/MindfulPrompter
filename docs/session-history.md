@@ -4,6 +4,44 @@ Reverse chronological order (most recent first).
 
 ---
 
+## Session 39 — 2026-03-20 (wmben PC — Redesign v2 Stages 2–5: Saved Sessions card + Start/Save card)
+
+**What was done:**
+
+**Data model changes (Stages 2–3 groundwork):**
+- Added `endedAt?: number` to `CoworkRoom` (Firebase) — marks session ended without deleting the room; prevents guests from joining ended rooms
+- Added `endRoom()` to `cowork.ts` — writes `endedAt: Date.now()` to Firebase
+- `computeRoomTiming()` returns `null` for ended rooms
+- Renamed `Preset` → `Template`, `PresetSlot` → `TemplateSlot`, `EditContext.type: 'preset'` → `'template'` throughout types.ts
+- Added `RecentSession` interface (id, settings snapshot, startedAt, name?, isCoworking, roomCode?)
+- Updated `SettingsFile`: `presets` → `templates`; added `recentSessions?: RecentSession[]`
+- `storage.ts`: renamed all six preset functions to template equivalents; on-load migration from `presets` key → `templates` (both localStorage and Tauri); added `getRecentSessions`, `addRecentSession`, `renameRecentSession`, `deleteRecentSession`; solo schedule cap: 5 → 3; `MAX_RECENTS = 5`
+- `App.tsx`: `handleHostEndSession` now calls `endRoom()` before clearing state; `handleSavePreset` → `handleSaveTemplate`; `addRecentSession` called in four handlers: `handleStartSolo`, `handleBeginSession`, `handleHostStart`, `handleCoworkGuestStart`
+- Join panel: checks `room.endedAt` before loading or joining — shows "This session has already ended."
+
+**Saved Sessions card overhaul (replacing two old cards):**
+- Removed "Scheduled & Active Sessions" card (emerald-themed) and "Saved Presets" card (indigo-themed)
+- New single white "Saved Sessions" card with four collapsible subsections: Live, Upcoming, Recent, Templates
+- Live solo detection: 4-hour heuristic (`now - startMs < 4h`)
+- Live cowork: `computeRoomTiming(r)?.isActive`
+- Each row: Solo/Coworking badge, timing label, clickable name → loads into `p` (pending state), room code inline for coworking rows, Options ▾ (Rename/Delete)
+- No Start buttons in rows — all starts go through the Start/Save card below
+- Templates subsection replaces old preset card; "presets" renamed to "templates" everywhere in UI
+
+**End session from Main (Stage 4):**
+- Live cowork rows now have "End session" option in their Options dropdown
+- Confirm UI (orange-50) warns "Guests will be notified it has ended"
+- Confirming calls `endFirebaseRoom(code)` and marks the room locally as `endedAt: Date.now()` — disappears from Live immediately
+
+**Unified Start/Save card (Stage 5):**
+- Replaced the separate indigo save-options bar + free-floating action button with one `rounded-2xl border border-gray-200 bg-white shadow-sm` card
+- Save options (when `isDirty`) sit in a top `border-b border-gray-100` section; neutral gray styling
+- Primary action button always in the bottom section of the card
+- Fixed `actionLabel`: `isGuest` → "Join Session"; `startType: 'specific'` → "Schedule Session" (was "Start Countdown")
+- `handleMainAction`: `isGuest` now calls `handleJoinSession()` immediately instead of starting a solo timer with guest settings (bug fix)
+
+---
+
 ## Session 38 — 2026-03-18 (wmben PC — Redesign v2 Stage 1: unified always-editable view)
 
 **What was done:**

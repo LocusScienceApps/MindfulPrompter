@@ -146,20 +146,31 @@ export interface CoworkRoom {
   /** Complete snapshot of host's settings at room creation time. Used to restore all host settings on load. */
   hostSettings?: Settings;
   createdAt: number;
+  /** Set when the host ends the session. Room stays in Firebase so the code is preserved. */
+  endedAt?: number;
 }
 
-/** Preset slot key — S1–S5 (unified, no mode prefix) */
-export type PresetSlot = 'S1' | 'S2' | 'S3' | 'S4' | 'S5';
+/** Template slot key — S1–S5 (unified, no mode prefix) */
+export type TemplateSlot = 'S1' | 'S2' | 'S3' | 'S4' | 'S5';
 
 /** What the user was editing when they clicked "Change Settings" */
 export type EditContext =
-  | { type: 'preset'; slot: PresetSlot; name: string }
+  | { type: 'template'; slot: TemplateSlot; name: string }
   | { type: 'cowork-room'; code: string; name: string };
 
-/** A saved preset */
-export interface Preset {
+/** A saved template */
+export interface Template {
   name: string;
   settings: Settings;
+}
+
+export interface RecentSession {
+  id: string;
+  settings: Settings;
+  startedAt: number;
+  name?: string;
+  isCoworking: boolean;
+  roomCode?: string;
 }
 
 /** A saved solo session schedule entry */
@@ -181,9 +192,10 @@ export type SoloSession = {
 /** The full persisted settings file structure */
 export interface SettingsFile {
   defaults?: Partial<Settings>;
-  presets: Partial<Record<PresetSlot, Preset>>;
+  templates: Partial<Record<TemplateSlot, Template>>;
   /** Array of saved solo sessions (max 5). Legacy: may be a single object — migrated on read. */
   soloSchedule?: SoloSession[] | Record<string, unknown>;
+  recentSessions?: RecentSession[];
 }
 
 /** Stats accumulated during a timer session */

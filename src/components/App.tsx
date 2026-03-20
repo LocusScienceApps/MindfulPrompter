@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, PresetSlot } from '@/lib/types';
+import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, TemplateSlot } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
-import { initStorage, getDefaults as getStoredDefaults, saveDefaults, savePreset, clearDefaults, getSoloSchedules, deleteSoloSchedule } from '@/lib/storage';
+import { initStorage, getDefaults as getStoredDefaults, saveDefaults, saveTemplate, clearDefaults, getSoloSchedules, deleteSoloSchedule, addRecentSession } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
 import Main from './screens/Main';
 import NotificationBanner from './ui/NotificationBanner';
@@ -21,6 +21,7 @@ import {
   computeRoomTiming,
   updateRoom,
   createRoom,
+  endRoom,
   computeMostRecentOccurrence,
   computeNextOccurrence,
 } from '@/lib/cowork';
@@ -168,6 +169,7 @@ export default function App() {
     setIsCoworkHost(false);
     setLoadedRoomCode(null);
     setSessionStats(null);
+    addRecentSession({ settings, startedAt: Date.now(), isCoworking: false });
     setScreen('timer');
   };
 
@@ -181,6 +183,7 @@ export default function App() {
     setCoworkStartTime(null);
     setIsCoworkHost(false);
     setSessionStats(null);
+    addRecentSession({ settings, startedAt: Date.now(), isCoworking: false });
     setScreen('timer');
   };
 
@@ -191,8 +194,8 @@ export default function App() {
     setSettings(s);
   };
 
-  const handleSavePreset = (slot: PresetSlot, name: string, s: Settings) => {
-    savePreset(slot, { name, settings: s });
+  const handleSaveTemplate = (slot: TemplateSlot, name: string, s: Settings) => {
+    saveTemplate(slot, { name, settings: s });
   };
 
   const handleResetToOriginal = () => {
@@ -212,7 +215,7 @@ export default function App() {
 
   // ── Preset / session loading ──
 
-  const handleLoadPreset = (presetSettings: Settings, slot?: PresetSlot, name?: string) => {
+  const handleLoadPreset = (presetSettings: Settings, slot?: TemplateSlot, name?: string) => {
     void slot; void name; // slot/name no longer tracked in App state
     setSettings({ ...presetSettings, lockedFields: undefined });
     setLoadedRoomCode(null);
@@ -289,6 +292,7 @@ export default function App() {
     setLoadedRoomCode(null);
     setSessionStats(null);
     const effectiveStartMs = startMs ?? Date.now();
+    addRecentSession({ settings: hostSettings, startedAt: effectiveStartMs, isCoworking: true, roomCode: code });
     const persisted: PersistedCoworkSession = {
       roomCode: code,
       role: 'host',
@@ -312,6 +316,7 @@ export default function App() {
     startMs: number,
   ) => {
     const guestSettings = buildGuestSettings(room, guestMode);
+    addRecentSession({ settings: guestSettings, startedAt: startMs, isCoworking: true, roomCode: room.code });
     setSettings(guestSettings);
     setCoworkRoomCode(room.code);
     setCoworkStartTime(startMs);
@@ -349,6 +354,7 @@ export default function App() {
   };
 
   const handleHostEndSession = () => {
+    if (coworkRoomCode) void endRoom(coworkRoomCode);
     localStorage.removeItem(COWORK_SESSION_KEY);
     setCoworkRoomCode(null);
     setCoworkStartTime(null);
@@ -504,7 +510,7 @@ export default function App() {
               onStart={handleStartSolo}
               onScheduledStart={handleScheduledStart}
               onSaveAsDefault={handleSaveAsDefault}
-              onSavePreset={handleSavePreset}
+              onSavePreset={handleSaveTemplate}
               onLoadPreset={handleLoadPreset}
               onLoadSession={handleLoadSession}
               onSaveToRoom={handleSaveToRoom}

@@ -12,13 +12,12 @@ Cross-platform mindfulness prompt + Pomodoro timer desktop app. Core value: **bl
 
 ## Current Status
 
-**Phase 2 in progress.** Session 38 complete — see [TODO.md](TODO.md) for next steps.
+**Phase 2 in progress.** Session 39 complete — see [TODO.md](TODO.md) for next steps.
 
 - Phase 1 ✅ (Sessions 1–21): all features matching batch file
-- Phase 2 🔄 (Sessions 22–38): Tauri + Firebase cowork + redesign v2 — **needs regression testing (TODO.md A–P)**
+- Phase 2 🔄 (Sessions 22–39): Tauri + Firebase cowork + redesign v2 — **needs regression testing (TODO.md A–P)**
 - Redesign v2 Stage 1 ✅ (Session 38): unified always-editable view — edit-lock removed, full form always shown, all fields pending until saved
-- Redesign v2 Stage 2 ⏳: combine Presets + Scheduled Sessions into one card
-- Redesign v2 Stage 3 ⏳: Start/Save button area redesign (single card, context-sensitive buttons)
+- Redesign v2 Stages 2–5 ✅ (Session 39): unified Saved Sessions card (Live/Upcoming/Recent/Templates); `endedAt` cowork tracking; End session from Main; unified Start/Save card; guest fix
 - Session 37 ✅: UI fixes, Settings modal, Why Prosochai text revisions
 - Session 36 ✅: Sessions section overhaul — Solo/Coworking subsections, up to 5 solo schedules, locale-aware formatting
 - Phase 3/4: optional accounts + paid tiers — post-traction only

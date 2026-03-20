@@ -14,6 +14,8 @@ interface TimerProps {
   settings: Settings;
   onSessionComplete: (stats: SessionStats) => void;
   onStop: (stats: SessionStats) => void;
+  /** Called when the user leaves a solo session without ending it (keeps it resumable). */
+  onLeave?: () => void;
   /** External start time (ms) for cowork sessions. If omitted, uses Date.now(). */
   coworkStartTime?: number;
   /** Room code for cowork sessions — enables "Show room code" toggle. */
@@ -162,13 +164,15 @@ function sendBrowserNotification(event: TimerEvent, playSound: boolean) {
   });
 }
 
-export default function Timer({ settings, onSessionComplete, onStop, coworkStartTime, coworkRoomCode, isCoworkHost, onHostEndSession }: TimerProps) {
+export default function Timer({ settings, onSessionComplete, onStop, onLeave, coworkStartTime, coworkRoomCode, isCoworkHost, onHostEndSession }: TimerProps) {
   const [elapsed, setElapsed] = useState(0);
   const [currentEvent, setCurrentEvent] = useState<TimerEvent | null>(null);
   const [log, setLog] = useState<LogEntry[]>([{ time: formatTime(), message: 'Session started' }]);
   const [showOverlay, setShowOverlay] = useState(false);
   const [showRoomCode, setShowRoomCode] = useState(false);
-  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [endConfirmState, setEndConfirmState] = useState<'idle' | 'confirm' | 'guest-info'>('idle');
+  const [tooltipVisible, setTooltipVisible] = useState<'leave' | 'end' | null>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localPlaySound, setLocalPlaySound] = useState(settings.playSound);
   const localPlaySoundRef = useRef(settings.playSound);
   useEffect(() => { localPlaySoundRef.current = localPlaySound; }, [localPlaySound]);
@@ -349,16 +353,65 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
     }
   }, [currentEvent, onSessionComplete, buildStats]);
 
-  const handleStop = () => {
+  const stopWorker = () => {
     if (workerRef.current) {
       workerRef.current.postMessage({ type: 'stop' });
       workerRef.current.terminate();
       workerRef.current = null;
     }
-    // Close the native popup window if one is open
     if (isTauri()) {
       import('@tauri-apps/api/event').then(({ emit }) => emit('session-stopped', {})).catch(() => {});
     }
+  };
+
+  const handleStop = () => {
+    stopWorker();
+    onStop(buildStats());
+  };
+
+  const handleLeave = () => {
+    stopWorker();
+    onLeave?.();
+  };
+
+  const showTooltip = (which: 'leave' | 'end') => {
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    setTooltipVisible(which);
+  };
+  const hideTooltip = () => {
+    tooltipTimerRef.current = setTimeout(() => setTooltipVisible(null), 200);
+  };
+
+  const isGuest = !!coworkRoomCode && !isCoworkHost;
+  const isHost = !!coworkRoomCode && !!isCoworkHost;
+
+  const leaveTooltip = isHost
+    ? 'Return to main screen — session keeps running for participants, rejoin anytime'
+    : 'Return to main screen — session stays running, rejoin anytime';
+
+  const endTooltip = isGuest
+    ? 'Only the host can end this session'
+    : isHost
+      ? 'Stop the timer and end the session for all participants'
+      : 'Stop the timer and mark this session as complete';
+
+  const confirmTitle = isHost ? 'End session for everyone?' : 'End this session?';
+  const confirmBody = isHost
+    ? 'This will stop the timer for you and all participants. The session will be marked complete.'
+    : 'The timer will stop and the session will be marked complete.';
+  const confirmLabel = isHost ? 'End for everyone' : 'End session';
+
+  const handleEndClick = () => {
+    if (isGuest) {
+      setEndConfirmState('guest-info');
+    } else {
+      setEndConfirmState('confirm');
+    }
+  };
+
+  const handleConfirmEnd = () => {
+    setEndConfirmState('idle');
+    stopWorker();
     onStop(buildStats());
   };
 
@@ -470,35 +523,76 @@ export default function Timer({ settings, onSessionComplete, onStop, coworkStart
         </button>
       </div>
 
-      {/* Stop / Leave buttons */}
-      <Button onClick={handleStop} variant="secondary" className="w-full">
-        {coworkRoomCode ? 'Leave Session' : 'Stop Session'}
-      </Button>
-
-      {/* Host-only: end session for everyone */}
-      {isCoworkHost && onHostEndSession && (
-        <>
-          {showEndConfirm ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
-              <p className="text-sm text-red-800">This will stop the session for all guests. Are you sure?</p>
-              <div className="flex gap-3">
-                <Button onClick={() => { handleStop(); onHostEndSession(); }} className="flex-1 !bg-red-600 hover:!bg-red-700 text-sm">
-                  End for Everyone
-                </Button>
-                <Button onClick={() => setShowEndConfirm(false)} variant="secondary" className="flex-1 text-sm">
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
+      {/* Leave · End session */}
+      {endConfirmState === 'idle' ? (
+        <div className="flex justify-center items-center gap-3 text-sm">
+          <div className="relative" onMouseEnter={() => showTooltip('leave')} onMouseLeave={hideTooltip}>
             <button
-              onClick={() => setShowEndConfirm(true)}
-              className="w-full text-xs text-gray-400 hover:text-red-500 underline text-center"
+              onClick={handleLeave}
+              className="border-b border-dotted border-gray-400 text-gray-500 hover:text-gray-700 transition-colors"
             >
-              Leave and end session for all guests
+              Leave session
             </button>
-          )}
-        </>
+            {tooltipVisible === 'leave' && (
+              <div
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg text-center z-10"
+                onMouseEnter={() => showTooltip('leave')}
+                onMouseLeave={hideTooltip}
+              >
+                {leaveTooltip}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+              </div>
+            )}
+          </div>
+          <span className="text-gray-400">·</span>
+          <div className="relative" onMouseEnter={() => showTooltip('end')} onMouseLeave={hideTooltip}>
+            <button
+              onClick={handleEndClick}
+              className="border-b border-dotted border-gray-400 text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              End session
+            </button>
+            {tooltipVisible === 'end' && (
+              <div
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg text-center z-10"
+                onMouseEnter={() => showTooltip('end')}
+                onMouseLeave={hideTooltip}
+              >
+                {endTooltip}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+              </div>
+            )}
+          </div>
+        </div>
+      ) : endConfirmState === 'guest-info' ? (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2 text-center">
+          <p className="text-sm font-medium text-indigo-900">Only the host can end this session.</p>
+          <p className="text-xs text-indigo-700">You can leave and rejoin anytime.</p>
+          <button
+            autoFocus
+            onClick={() => setEndConfirmState('idle')}
+            className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            OK
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+          <p className="text-sm font-semibold text-red-900">{confirmTitle}</p>
+          <p className="text-xs text-red-700">{confirmBody}</p>
+          <div className="flex gap-3">
+            <button
+              autoFocus
+              onClick={() => setEndConfirmState('idle')}
+              className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            >
+              Cancel
+            </button>
+            <Button onClick={handleConfirmEnd} className="flex-1 !bg-red-600 hover:!bg-red-700 text-sm">
+              {confirmLabel}
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Notification overlay */}

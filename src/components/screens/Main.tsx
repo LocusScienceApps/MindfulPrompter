@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { openExternal } from '@/lib/tauri';
-import type { Settings, TemplateSlot, CoworkRoom, GuestContentMode, CoworkDay, MindfulnessScope, SoloSession, RecentSession } from '@/lib/types';
+import type { Settings, TemplateSlot, CoworkRoom, GuestContentMode, CoworkDay, MindfulnessScope, SoloSession, RecentSession, PersistedSoloSession } from '@/lib/types';
 import { formatTime, formatDate, formatTimestamp, formatRecurring } from '@/lib/formatLocale';
 import {
   listTemplates, renameTemplate, deleteTemplate,
@@ -228,6 +228,8 @@ interface MainProps {
   onDeleteSoloSchedule: (id: string) => void;
   onDirtyStateChange: (dirty: boolean) => void;
   loadedRoomCode: string | null;
+  /** Currently running solo session (left but not ended). Used to gate Live display. */
+  runningSoloSession: PersistedSoloSession | null;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -248,6 +250,7 @@ export default function Main({
   onDeleteSoloSchedule,
   onDirtyStateChange,
   loadedRoomCode,
+  runningSoloSession,
 }: MainProps) {
   const [pendingSettings, setPendingSettings] = useState<Settings>(settings);
 
@@ -672,7 +675,12 @@ export default function Main({
       return ms(a) - ms(b);
     });
 
+  // A solo schedule is "Live" if it's within the 4-hour time window, unless it was
+  // Show schedules as Live only when there's an active running session.
+  // If the session has a scheduleId, only show that schedule. Otherwise fall back to time window.
   const liveSoloItems = soloSchedules.filter((s) => {
+    if (!runningSoloSession) return false;
+    if (runningSoloSession.scheduleId) return s.id === runningSoloSession.scheduleId;
     if (s.type === 'specific') {
       const ms = new Date(`${s.date}T${s.time}`).getTime();
       return !isNaN(ms) && ms <= now && now - ms < 4 * 60 * 60 * 1000;

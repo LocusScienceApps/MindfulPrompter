@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, TemplateSlot } from '@/lib/types';
+import type { Screen, Settings, SessionStats, CoworkRoom, PersistedCoworkSession, PersistedSoloSession, TemplateSlot } from '@/lib/types';
 import { getDefaults } from '@/lib/defaults';
 import { initStorage, getDefaults as getStoredDefaults, saveDefaults, saveTemplate, clearDefaults, getSoloSchedules, deleteSoloSchedule, addRecentSession } from '@/lib/storage';
 import { registerServiceWorker } from '@/lib/registerSW';
@@ -29,6 +29,7 @@ import type { GuestContentMode, CoworkTimingSettings } from '@/lib/types';
 import type { NewRoomInput } from '@/lib/cowork';
 
 const COWORK_SESSION_KEY = 'mindful-prompter-cowork-session';
+const SOLO_SESSION_KEY = 'mindful-prompter-solo-session';
 
 /** Merge factory defaults with any saved custom defaults. */
 function getInitialSettings(): Settings {
@@ -53,6 +54,11 @@ export default function App() {
   // Code of the currently-loaded cowork session on Main (distinct from coworkRoomCode
   // which tracks the active timer session). Used for "Save changes to session" logic.
   const [loadedRoomCode, setLoadedRoomCode] = useState<string | null>(null);
+
+  // Running solo session (left but not ended)
+  const [runningSoloSession, setRunningSoloSession] = useState<PersistedSoloSession | null>(null);
+  // True after ending a session — suppresses the active schedule banner until a new session starts
+  const [hasJustEndedSession, setHasJustEndedSession] = useState(false);
 
   // Solo schedule notice state
   const [upcomingSessionMs, setUpcomingSessionMs] = useState<number | null>(null);
@@ -105,6 +111,25 @@ export default function App() {
         }
       } catch {
         localStorage.removeItem(COWORK_SESSION_KEY);
+      }
+
+      // Auto-rejoin solo session on page refresh (only if cowork didn't restore)
+      try {
+        const soloRaw = localStorage.getItem(SOLO_SESSION_KEY);
+        if (soloRaw) {
+          const persisted = JSON.parse(soloRaw) as PersistedSoloSession;
+          const elapsed = Date.now() - persisted.startMs;
+          if (elapsed >= 0 && elapsed < 4 * 60 * 60 * 1000) {
+            setSettings(persisted.settings);
+            setCoworkStartTime(persisted.startMs);
+            setRunningSoloSession(persisted);
+            setScreen('timer');
+          } else {
+            localStorage.removeItem(SOLO_SESSION_KEY);
+          }
+        }
+      } catch {
+        localStorage.removeItem(SOLO_SESSION_KEY);
       }
 
       setStorageReady(true);
@@ -164,12 +189,16 @@ export default function App() {
   // ── Session start handlers ──
 
   const handleStartSolo = () => {
+    const startMs = Date.now();
+    const persisted: PersistedSoloSession = { startMs, settings };
+    localStorage.setItem(SOLO_SESSION_KEY, JSON.stringify(persisted));
+    setRunningSoloSession(persisted);
+    setHasJustEndedSession(false);
     setCoworkRoomCode(null);
-    setCoworkStartTime(null);
+    setCoworkStartTime(startMs);
     setIsCoworkHost(false);
     setLoadedRoomCode(null);
     setSessionStats(null);
-    addRecentSession({ settings, startedAt: Date.now(), isCoworking: false });
     setScreen('timer');
   };
 
@@ -179,12 +208,63 @@ export default function App() {
   };
 
   const handleBeginSession = () => {
+    const startMs = Date.now();
+    const persisted: PersistedSoloSession = { startMs, settings };
+    localStorage.setItem(SOLO_SESSION_KEY, JSON.stringify(persisted));
+    setRunningSoloSession(persisted);
+    setHasJustEndedSession(false);
     setCoworkRoomCode(null);
-    setCoworkStartTime(null);
+    setCoworkStartTime(startMs);
     setIsCoworkHost(false);
     setSessionStats(null);
-    addRecentSession({ settings, startedAt: Date.now(), isCoworking: false });
     setScreen('timer');
+  };
+
+  const handleJoinActiveSoloSession = () => {
+    if (activeSessionMs === null) return;
+    const schedule = getSoloSchedules().find(s => s.id === activeSessionId);
+    const sessionSettings = schedule?.settings ?? settings;
+    const persisted: PersistedSoloSession = { startMs: activeSessionMs, settings: sessionSettings, scheduleId: activeSessionId ?? undefined };
+    localStorage.setItem(SOLO_SESSION_KEY, JSON.stringify(persisted));
+    setRunningSoloSession(persisted);
+    setHasJustEndedSession(false);
+    setSettings(sessionSettings);
+    setCoworkRoomCode(null);
+    setCoworkStartTime(activeSessionMs);
+    setIsCoworkHost(false);
+    setLoadedRoomCode(null);
+    setSessionStats(null);
+    setScreen('timer');
+  };
+
+  /** Leave an active solo session without ending it — timer state stays in localStorage. */
+  const handleLeaveSoloSession = () => {
+    setScreen('main');
+  };
+
+  /** Rejoin a running solo session that was left. */
+  const handleRejoinSoloSession = () => {
+    if (!runningSoloSession) return;
+    setSettings(runningSoloSession.settings);
+    setCoworkRoomCode(null);
+    setCoworkStartTime(runningSoloSession.startMs);
+    setIsCoworkHost(false);
+    setLoadedRoomCode(null);
+    setSessionStats(null);
+    setScreen('timer');
+  };
+
+  /** End a running solo session from the main-screen banner (no stats screen). */
+  const handleEndSoloFromBanner = () => {
+    addRecentSession({
+      settings: runningSoloSession?.settings ?? settings,
+      startedAt: runningSoloSession?.startMs ?? Date.now(),
+      isCoworking: false,
+    });
+    setHasJustEndedSession(true);
+    localStorage.removeItem(SOLO_SESSION_KEY);
+    setRunningSoloSession(null);
+    setCoworkStartTime(null);
   };
 
   // ── Settings save handlers (called from Main) ──
@@ -236,6 +316,7 @@ export default function App() {
     setIsCoworkHost(true);
     setLoadedRoomCode(null);
     setSessionStats(null);
+    setHasJustEndedSession(false);
     const persisted: PersistedCoworkSession = {
       roomCode: room.code,
       role: 'host',
@@ -291,8 +372,8 @@ export default function App() {
     setIsCoworkHost(true);
     setLoadedRoomCode(null);
     setSessionStats(null);
+    setHasJustEndedSession(false);
     const effectiveStartMs = startMs ?? Date.now();
-    addRecentSession({ settings: hostSettings, startedAt: effectiveStartMs, isCoworking: true, roomCode: code });
     const persisted: PersistedCoworkSession = {
       roomCode: code,
       role: 'host',
@@ -316,13 +397,13 @@ export default function App() {
     startMs: number,
   ) => {
     const guestSettings = buildGuestSettings(room, guestMode);
-    addRecentSession({ settings: guestSettings, startedAt: startMs, isCoworking: true, roomCode: room.code });
     setSettings(guestSettings);
     setCoworkRoomCode(room.code);
     setCoworkStartTime(startMs);
     setIsCoworkHost(false);
     setLoadedRoomCode(null);
     setSessionStats(null);
+    setHasJustEndedSession(false);
     const persisted: PersistedCoworkSession = {
       roomCode: room.code,
       role: 'guest',
@@ -336,7 +417,18 @@ export default function App() {
   // ── Session end ──
 
   const handleSessionEnd = (stats: SessionStats) => {
+    if (coworkRoomCode && isCoworkHost) void endRoom(coworkRoomCode);
+    addRecentSession({
+      settings,
+      startedAt: coworkStartTime ?? Date.now(),
+      isCoworking: coworkRoomCode !== null,
+      roomCode: coworkRoomCode ?? undefined,
+    });
+    setHasJustEndedSession(true);
     localStorage.removeItem(COWORK_SESSION_KEY);
+    localStorage.removeItem(SOLO_SESSION_KEY);
+    setRunningSoloSession(null);
+    setCoworkStartTime(null);
     setSessionStats(stats);
     setScreen('session-complete');
   };
@@ -355,6 +447,12 @@ export default function App() {
 
   const handleHostEndSession = () => {
     if (coworkRoomCode) void endRoom(coworkRoomCode);
+    addRecentSession({
+      settings,
+      startedAt: coworkStartTime ?? Date.now(),
+      isCoworking: true,
+      roomCode: coworkRoomCode ?? undefined,
+    });
     localStorage.removeItem(COWORK_SESSION_KEY);
     setCoworkRoomCode(null);
     setCoworkStartTime(null);
@@ -388,8 +486,9 @@ export default function App() {
     );
   }
 
-  const showUpcoming = screen === 'main' && upcomingSessionMs !== null;
-  const showActive = screen === 'main' && activeSessionMs !== null;
+  const showRunning = screen === 'main' && runningSoloSession !== null;
+  const showUpcoming = screen === 'main' && upcomingSessionMs !== null && !showRunning && !hasJustEndedSession;
+  const showActive = screen === 'main' && activeSessionMs !== null && !showRunning && !hasJustEndedSession;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
@@ -441,62 +540,86 @@ export default function App() {
           </div>
         </div>
 
-        {/* ── Solo schedule notice ── */}
-        {(showUpcoming || showActive) && (
+        {/* ── Solo schedule / running session notice ── */}
+        {(showUpcoming || showActive || showRunning) && (
           <div className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
-            {showUpcoming && (
-              <p className="text-sm font-medium text-indigo-900">
-                ⏰ Your scheduled session starts in {formatRelativeMinutes(upcomingSessionMs!)}.
-              </p>
-            )}
-            {showActive && (
-              <p className="text-sm font-medium text-indigo-900">
-                ▶ Your scheduled session started {formatRelativeMinutes(activeSessionMs!)} ago.
-              </p>
-            )}
-            {cancelScheduleConfirm ? (
-              <div className="space-y-2">
-                <p className="text-xs text-indigo-800">Are you sure? This will delete your saved schedule.</p>
-                <div className="flex gap-2">
+            {showRunning ? (
+              <>
+                <p className="text-sm font-medium text-indigo-900">
+                  ▶ Your session is still running ({formatRelativeMinutes(runningSoloSession!.startMs)} in).
+                </p>
+                <div className="flex gap-3 items-center flex-wrap">
                   <button
-                    onClick={() => handleCancelSchedule()}
-                    className="text-xs font-medium text-red-600 hover:text-red-800"
+                    onClick={handleEndSoloFromBanner}
+                    className="text-xs text-gray-500 hover:text-red-600 underline"
                   >
-                    Yes, cancel it
+                    End session
                   </button>
                   <button
-                    onClick={() => setCancelScheduleConfirm(false)}
-                    className="text-xs text-gray-500 hover:text-gray-700"
+                    onClick={handleRejoinSoloSession}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
                   >
-                    Never mind
+                    → Rejoin
                   </button>
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="flex gap-3 items-center flex-wrap">
-                <button
-                  onClick={() => setCancelScheduleConfirm(true)}
-                  className="text-xs text-gray-500 hover:text-red-600 underline"
-                >
-                  {showActive ? 'Skip this session' : 'Cancel session'}
-                </button>
+              <>
                 {showUpcoming && (
-                  <button
-                    onClick={() => handleScheduledStart(upcomingSessionMs!)}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-                  >
-                    → Go to session
-                  </button>
+                  <p className="text-sm font-medium text-indigo-900">
+                    ⏰ Your scheduled session starts in {formatRelativeMinutes(upcomingSessionMs!)}.
+                  </p>
                 )}
                 {showActive && (
-                  <button
-                    onClick={handleBeginSession}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-                  >
-                    → Join now
-                  </button>
+                  <p className="text-sm font-medium text-indigo-900">
+                    ▶ Your scheduled session started {formatRelativeMinutes(activeSessionMs!)} ago.
+                  </p>
                 )}
-              </div>
+                {cancelScheduleConfirm ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-indigo-800">Are you sure? This will delete your saved schedule.</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleCancelSchedule()}
+                        className="text-xs font-medium text-red-600 hover:text-red-800"
+                      >
+                        Yes, cancel it
+                      </button>
+                      <button
+                        onClick={() => setCancelScheduleConfirm(false)}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Never mind
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <button
+                      onClick={() => setCancelScheduleConfirm(true)}
+                      className="text-xs text-gray-500 hover:text-red-600 underline"
+                    >
+                      {showActive ? 'Skip this session' : 'Cancel session'}
+                    </button>
+                    {showUpcoming && (
+                      <button
+                        onClick={() => handleScheduledStart(upcomingSessionMs!)}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        → Go to session
+                      </button>
+                    )}
+                    {showActive && (
+                      <button
+                        onClick={handleJoinActiveSoloSession}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        → Join now
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -520,6 +643,7 @@ export default function App() {
               onDeleteSoloSchedule={handleCancelSchedule}
               onDirtyStateChange={setEditDirty}
               loadedRoomCode={loadedRoomCode}
+              runningSoloSession={runningSoloSession}
             />
           </>
         )}
@@ -542,6 +666,7 @@ export default function App() {
             isCoworkHost={isCoworkHost}
             onSessionComplete={handleSessionEnd}
             onStop={handleSessionEnd}
+            onLeave={handleLeaveSoloSession}
             onHostEndSession={handleHostEndSession}
           />
         )}

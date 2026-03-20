@@ -1,6 +1,6 @@
 # Prosochai TODO
 
-## Status: Session 39 complete — Redesign v2 Stages 2–5: Saved Sessions card + unified Start/Save card; regression testing still needed
+## Status: Session 40 complete — Bug fix: End session now correctly clears Live display + schedule banner; regression testing still needed
 
 **Before testing anything:** Run `dev-browser.bat` (browser) or `dev-tauri.bat` (full app).
 
@@ -20,6 +20,7 @@
 ### 10. ✅ Session 37: UI fixes, Settings modal (⚙ gear → "Restore software defaults"), Why Prosochai text revisions — **implemented**
 ### 11. ✅ Session 38: Redesign v2 Stage 1 — unified always-editable view; edit-lock toggle + SettingsDisplay removed; all fields always shown as editable form; all changes pending until saved/started — **implemented**
 ### 12. ✅ Session 39: Redesign v2 Stages 2–5 — Saved Sessions unified card (Live/Upcoming/Recent/Templates subsections); endedAt cowork tracking; End session from Main; unified Start/Save card; actionLabel + handleMainAction guest fix — **implemented**
+### 13. ✅ Session 40: Bug fix — "End session" vs "Leave session" Live display + schedule banner — `hasJustEndedSession` flag suppresses active schedule banner; `liveSoloItems` gated on `runningSoloSession` so Live clears on end — **implemented**
 
 ---
 

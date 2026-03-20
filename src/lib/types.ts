@@ -214,3 +214,10 @@ export interface PersistedCoworkSession {
   contentMode: GuestContentMode;
   startMs: number;
 }
+
+export interface PersistedSoloSession {
+  startMs: number;
+  settings: Settings;
+  /** The solo schedule ID that spawned this session, if any. */
+  scheduleId?: string;
+}
